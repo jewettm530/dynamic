@@ -1,7 +1,19 @@
 .ipynb_checkpoints/
 __pycache__/
 *.swp
+# Environments
+echonet_env/
+venv/
+.env
+
+# Data and Config
 echonet.cfg
 .echonet.cfg
+echonet_data/
+*.avi
+*.csv
+
+# Python bloat
+__pycache__/
 *.pyc
 echonet.egg-info/
