@@ -1,19 +1,36 @@
-.ipynb_checkpoints/
-__pycache__/
-*.swp
-# Environments
+# ==============================================================================
+# 1. Server-Specific Installs & Environments (CRITICAL)
+# ==============================================================================
+# Prevents your entire massive Miniconda installation folder from syncing to GitHub
+miniconda3/
 echonet_env/
 venv/
 .env
 
-# Data and Config
+# ==============================================================================
+# 2. Large Datasets & Heavy Outputs (CRITICAL for GPU Storage)
+# ==============================================================================
+# Your new dedicated storage folders
+datasets/
+checkpoints/
+
+# Existing data rules from your original file
 echonet.cfg
 .echonet.cfg
 echonet_data/
 *.avi
 *.csv
+*.mp4
+*.tar.gz
+*.zip
 
-# Python bloat
+# ==============================================================================
+# 3. Python, Jupyter, & System Bloat
+# ==============================================================================
+.ipynb_checkpoints/
 __pycache__/
 *.pyc
+*.swp
 echonet.egg-info/
+.DS_Storeoutputs/
+outputs/
