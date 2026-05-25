@@ -1,4 +1,4 @@
-Dice: 0.7268
-IoU: 0.5715
-Hausdorff: 5.14
-Accuracy: 0.9561
+Dice: 0.7577
+IoU: 0.6101
+Hausdorff: 5.28
+Accuracy: 0.9915
