@@ -200,9 +200,9 @@ class Echo(torchvision.datasets.VisionDataset):
             if t == "Filename":
                 target.append(self.fnames[index])
             elif t == "LargeIndex":
-                target.append(np.int(self.frames[key][-1]))
+                target.append(int(self.frames[key][-1]))
             elif t == "SmallIndex":
-                target.append(np.int(self.frames[key][0]))
+                target.append(int(self.frames[key][0]))
             elif t == "LargeFrame":
                 target.append(video[:, self.frames[key][-1], :, :])
             elif t == "SmallFrame":
@@ -215,7 +215,7 @@ class Echo(torchvision.datasets.VisionDataset):
                 x1, y1, x2, y2 = trace[:, 0], trace[:, 1], trace[:, 2], trace[:, 3]
                 x = np.concatenate((x1[1:], np.flip(x2[1:])))
                 y = np.concatenate((y1[1:], np.flip(y2[1:])))
-                r, c = skimage.draw.polygon(np.rint(y).astype(np.int), np.rint(x).astype(np.int), (video.shape[2], video.shape[3]))
+                r, c = skimage.draw.polygon(np.rint(y).astype(int), np.rint(x).astype(int), (video.shape[2], video.shape[3]))
                 mask = np.zeros((video.shape[2], video.shape[3]), np.float32)
                 mask[r, c] = 1
                 target.append(mask)
@@ -223,7 +223,12 @@ class Echo(torchvision.datasets.VisionDataset):
                 if self.split in ["CLINICAL_TEST", "EXTERNAL_TEST"]:
                     target.append(np.float32(0))
                 else:
-                    target.append(np.float32(self.outcome[index][self.header.index(t)]))
+                    if t in self.header:
+                        target.append(np.float32(self.outcome[index][self.header.index(t)]))
+                    else:
+                        # Fallback: append 0.0 if column not found
+                        print(f"Warning: '{t}' not in header; using 0.0")
+                        target.append(np.float32(0.0))
 
         if target:
             target = tuple(target) if len(target) > 1 else target[0]

@@ -34,3 +34,7 @@ __pycache__/
 echonet.egg-info/
 .DS_Storeoutputs/
 outputs/
+*.pt
+test_output/
+*.log
+*.pkl
