@@ -1,0 +1,25 @@
+/data/jewettm/miniconda3/lib/python3.13/site-packages/torch/_subclasses/functional_tensor.py:307: UserWarning: Failed to initialize NumPy: module 'numpy._globals' has no attribute '_signature_descriptor' (Triggered internally at /home/task_177834812075120/croot/libtorch_1778348166788/work/torch/csrc/utils/tensor_numpy.cpp:84.)
+  cpu = _conversion_method_template(device=torch.device("cpu"))
+ImportError: cannot load module more than once per process
+Traceback (most recent call last):
+  File "<string>", line 2, in <module>
+    import echonet
+  File "/data/jewettm/dynamic/echonet/__init__.py", line 9, in <module>
+    import echonet.datasets as datasets
+  File "/data/jewettm/dynamic/echonet/datasets/__init__.py", line 6, in <module>
+    from .echo import Echo
+  File "/data/jewettm/dynamic/echonet/datasets/echo.py", line 8, in <module>
+    import pandas as pd
+  File "/home/jewettm/.local/lib/python3.13/site-packages/pandas/__init__.py", line 44, in <module>
+    import pandas.core.config_init  # pyright: ignore[reportUnusedImport] # noqa: F401
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jewettm/.local/lib/python3.13/site-packages/pandas/core/config_init.py", line 31, in <module>
+    from pandas.errors import Pandas4Warning
+  File "/home/jewettm/.local/lib/python3.13/site-packages/pandas/errors/__init__.py", line 12, in <module>
+    from pandas._libs.tslibs import (
+    ...<3 lines>...
+    )
+  File "/home/jewettm/.local/lib/python3.13/site-packages/pandas/_libs/__init__.py", line 17, in <module>
+    import pandas._libs.pandas_datetime  # noqa: F401 # isort: skip # type: ignore[reportUnusedImport]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ImportError: numpy._core.multiarray failed to import

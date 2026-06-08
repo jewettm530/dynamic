@@ -11,7 +11,6 @@ import tqdm
 
 from . import video
 from . import segmentation
-from . import volume
 
 
 def loadvideo(filename: str) -> np.ndarray:
@@ -44,8 +43,8 @@ def loadvideo(filename: str) -> np.ndarray:
         if not ret:
             raise ValueError("Failed to load frame #{} of {}.".format(count, filename))
 
-        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        v[count] = frame
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        v[count, :, :] = frame
 
     v = v.transpose((3, 0, 1, 2))
 
@@ -64,27 +63,16 @@ def savevideo(filename: str, array: np.ndarray, fps: typing.Union[float, int] = 
         None
     """
 
-    c, f, height, width = array.shape
+    c, _, height, width = array.shape
 
     if c != 3:
         raise ValueError("savevideo expects array of shape (channels=3, frames, height, width), got shape ({})".format(", ".join(map(str, array.shape))))
-    if os.path.splitext(filename)[-1] == ".avi":
-        fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-    elif os.path.splitext(filename)[-1] == ".mp4":
-        fourcc = cv2.VideoWriter_fourcc('M', 'P', '4', 'V')
-        # https://stackoverflow.com/questions/49530857/python-opencv-video-format-play-in-browser
-        fourcc = cv2.VideoWriter_fourcc(*'H264')
-        fourcc = 0x00000021
-        fourcc = 0x00000021
-        fourcc = cv2.VideoWriter_fourcc('V','P','8','0')
-    elif os.path.splitext(filename)[-1] == ".webm":
-        fourcc = cv2.VideoWriter_fourcc(*'vp80')
-    else:
-        asndksadnk
+    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
     out = cv2.VideoWriter(filename, fourcc, fps, (width, height))
 
-    for i in range(f):
-        out.write(array[:, i, :, :].transpose((1, 2, 0)))
+    for frame in array.transpose((1, 2, 3, 0)):
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        out.write(frame)
 
 
 def get_mean_and_std(dataset: torch.utils.data.Dataset,
