@@ -18,7 +18,7 @@ import echonet
 
 def run(num_epochs=50,
         modelname="deeplabv3_resnet50",
-        pretrained=False,
+        pretrained=True,
         output=None,
         device=None,
         n_train_patients=None,
@@ -44,7 +44,7 @@ def run(num_epochs=50,
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Set up model (2D segmentation)
-    model = torchvision.models.segmentation.__dict__[modelname](pretrained=pretrained, aux_loss=False)
+    model = torchvision.models.segmentation.__dict__[modelname](pretrained=pretrained, aux_loss=True)
     # Change output channels to 1 (background/foreground)
     model.classifier[-1] = torch.nn.Conv2d(model.classifier[-1].in_channels, 1, kernel_size=model.classifier[-1].kernel_size)
 
