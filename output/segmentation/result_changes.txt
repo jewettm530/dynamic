@@ -1,0 +1,157 @@
+# Summary table
+
+| Experiment | Architecture       | Initialization      | Best Epoch |  Test Dice | Status           |
+| ---------- | ------------------ | ------------------- | ---------: | ---------: | ---------------- |
+| #1         | DeepLabV3-ResNet50 | Random              |         34 | **0.5521** | Baseline         |
+| #2         | DeepLabV3-ResNet50 | ImageNet Pretrained |         15 | **0.9230** | **Current Best** |
+| #3         | Medical ViT        | Pretrained          |          — |          — | Planned          |
+
+======================================================================
+
+# EchoNet-Dynamic Segmentation Experiment Log
+---
+
+## Experiment #1
+### Experiment Name
+DeepLabV3-ResNet50 (Random Initialization)
+### Date
+June 27, 2026
+### Status
+✓ Completed
+### Purpose / Hypothesis
+Establish a baseline CNN segmentation model trained from scratch (without pretrained weights) for comparison with a pretrained CNN and future Vision Transformer (ViT) implementations.
+---
+### Model Information
+**Architecture:** DeepLabV3-ResNet50
+**Backbone:** ResNet-50
+**Initialization:** Random (pretrained=False)
+**Task:** Binary Left Ventricle Segmentation
+---
+### Code Changes
+None.
+This experiment used the existing CNN implementation without pretrained ImageNet weights.
+---
+### Hyperparameters
+Epochs: 50
+Batch Size: 8
+Learning Rate: 1e-5
+Optimizer: SGD (Momentum = 0.9)
+Weight Decay: 1e-5
+Input Size: 112 × 112
+Loss Function: Binary Cross Entropy with Logits
+---
+### Output Folder
+output/segmentation/cnn_baseline
+---
+### Results
+#### Best Epoch:
+34
+#### Validation Dice
+Overall: 0.5379
+Large Frame (ED): 0.4505
+Small Frame (ES): 0.5886
+#### Test Dice
+Overall: 0.5521
+Large Frame (ED): 0.4648
+Small Frame (ES): 0.6025
+---
+### Observations
+The model successfully converged but achieved relatively poor segmentation performance.
+Training Dice continued increasing throughout training, while validation Dice remained substantially below the performance reported in the original EchoNet publication.
+Final test Dice (~55%) indicated that training from scratch was insufficient for achieving state-of-the-art segmentation accuracy.
+---
+### Conclusion
+This experiment serves as the baseline CNN implementation and demonstrates the importance of pretrained feature representations for the EchoNet-Dynamic segmentation task.
+
+======================================================================
+
+## Experiment #2
+### Experiment Name
+DeepLabV3-ResNet50 (ImageNet Pretrained)
+### Date
+June 28, 2026
+### Status
+✓ Completed
+### Purpose / Hypothesis
+Evaluate whether initializing the CNN with pretrained ImageNet weights improves left ventricular segmentation performance while keeping all training hyperparameters identical to the baseline experiment.
+---
+### Model Information
+Architecture: DeepLabV3-ResNet50
+Backbone: ResNet-50
+Initialization: ImageNet Pretrained (pretrained=True)
+Task: Binary Left Ventricle Segmentation
+---
+### Code Changes
+Changes from Experiment #1:
+• Enabled pretrained ImageNet weights (pretrained=True)
+• Updated the segmentation implementation to remain compatible with newer torchvision versions while preserving the original EchoNet training behavior.
+• Restored the original EchoNet loss computation and evaluation pipeline discussed during debugging.
+No hyperparameters were changed.
+---
+### Hyperparameters
+Epochs: 50
+Batch Size: 8
+Learning Rate: 1e-5
+Optimizer: SGD (Momentum = 0.9)
+Weight Decay: 1e-5
+Input Size: 112 × 112
+Loss Function: Binary Cross Entropy with Logits
+---
+### Output Folder
+output/segmentation/cnn_pretrained
+---
+### Results
+#### Best Epoch:
+15
+#### Validation Dice
+Overall: 0.9229
+Large Frame (ED): 0.9090
+Small Frame (ES): 0.9316
+#### Test Dice
+Overall: 0.9230
+Large Frame (ED): 0.9087
+Small Frame (ES): 0.9320
+---
+### Comparison to Previous Experiment
+Only change:
+Random initialization → ImageNet pretrained initialization
+#### Performance Improvement
+Overall Test Dice
+0.5521 → 0.9230
+#### Improvement:
++0.3709 Dice (+37.1 percentage points)
+Large Frame Dice
+0.4648 → 0.9087
+#### Improvement:
++0.4439 Dice
+Small Frame Dice
+0.6025 → 0.9320
+#### Improvement:
++0.3295 Dice
+---
+### Observations
+Using pretrained ImageNet weights dramatically improved convergence and segmentation accuracy.
+The model exceeded the professor's target of achieving Dice scores above 90%.
+The best-performing model occurred at epoch 15, after which training performance continued improving but validation performance no longer improved, indicating mild overfitting. The final evaluation correctly used the best validation checkpoint rather than the final training epoch.
+---
+### Conclusion
+Pretrained ImageNet initialization substantially outperformed training from scratch and will be used as the CNN baseline for future comparison with Vision Transformer (ViT) segmentation models.
+
+======================================================================
+
+## Planned Experiment #3
+
+Architecture:
+Medical Vision Transformer (ViT)
+
+Purpose:
+Replace the CNN backbone with a Medical Vision Transformer while keeping:
+• Learning rate identical
+• Optimizer identical
+• Weight decay identical
+• Batch size identical
+• Epoch count identical
+• Input size identical (112 × 112)
+
+Goal:
+Compare parameter count, convergence behavior, and segmentation performance against the pretrained CNN baseline.

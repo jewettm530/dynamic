@@ -1,0 +1,258 @@
+EchoNet-Dynamic Segmentation Output Files
+=========================================
+
+This document describes the purpose of each output file generated after
+training and evaluating the EchoNet-Dynamic segmentation model.
+
+----------------------------------------------------------------------
+1. checkpoint.pt
+----------------------------------------------------------------------
+
+Purpose:
+    Stores the most recent training checkpoint.
+
+Contains:
+    - Current model weights
+    - Optimizer state
+    - Learning rate scheduler state
+    - Current epoch
+    - Best validation loss
+
+Use:
+    Allows interrupted training to resume from the last completed epoch
+    instead of starting over.
+
+----------------------------------------------------------------------
+
+2. best.pt
+----------------------------------------------------------------------
+
+Purpose:
+    Stores the model that achieved the lowest validation loss during
+    training.
+
+Contains:
+    - Model weights from the best-performing epoch
+
+Use:
+    This checkpoint is automatically loaded before final validation and
+    test evaluation.
+
+This is the model that should be used for inference and reporting final
+results.
+
+----------------------------------------------------------------------
+
+3. log.csv
+----------------------------------------------------------------------
+
+Purpose:
+    Records training progress throughout every epoch.
+
+Each row contains:
+    - Epoch number
+    - Dataset split (train or validation)
+    - Loss
+    - Overall Dice
+    - Large-frame Dice
+    - Small-frame Dice
+    - Runtime
+    - Dataset size
+    - GPU memory usage
+    - Batch size
+
+Also records:
+    - Best validation epoch
+    - Final validation Dice
+    - Final test Dice
+    - 95% confidence intervals
+
+Use:
+    - Monitor training convergence
+    - Detect overfitting
+    - Plot learning curves
+    - Report final performance
+
+----------------------------------------------------------------------
+
+4. val_dice.csv
+----------------------------------------------------------------------
+
+Purpose:
+    Stores Dice scores for every individual validation video.
+
+Columns:
+    Filename
+    Overall Dice
+    Large Frame Dice
+    Small Frame Dice
+
+Use:
+    - Analyze validation performance
+    - Find best and worst validation examples
+    - Compute additional statistics
+    - Identify difficult cases
+
+----------------------------------------------------------------------
+
+5. test_dice.csv
+----------------------------------------------------------------------
+
+Purpose:
+    Stores Dice scores for every individual test video.
+
+Columns:
+    Filename
+    Overall Dice
+    Large Frame Dice
+    Small Frame Dice
+
+Use:
+    - Final model evaluation
+    - Failure case analysis
+    - Find best and worst test examples
+    - Compare different models
+
+----------------------------------------------------------------------
+
+6. hist_overall_val.pdf
+----------------------------------------------------------------------
+
+Purpose:
+    Histogram of Overall Dice scores for every validation video.
+
+X-axis:
+    Dice Score (0-1)
+
+Y-axis:
+    Number of videos
+
+Use:
+    Shows the distribution of overall segmentation performance on the
+    validation set.
+
+----------------------------------------------------------------------
+
+7. hist_large_val.pdf
+----------------------------------------------------------------------
+
+Purpose:
+    Histogram of Dice scores for Large Frame (End-Diastole) segmentations
+    on the validation set.
+
+Use:
+    Evaluates segmentation performance during the end-diastolic phase.
+
+----------------------------------------------------------------------
+
+8. hist_small_val.pdf
+----------------------------------------------------------------------
+
+Purpose:
+    Histogram of Dice scores for Small Frame (End-Systole) segmentations
+    on the validation set.
+
+Use:
+    Evaluates segmentation performance during the end-systolic phase.
+
+----------------------------------------------------------------------
+
+9. hist_overall_test.pdf
+----------------------------------------------------------------------
+
+Purpose:
+    Histogram of Overall Dice scores for every test video.
+
+Use:
+    Visualizes the overall distribution of model performance on the
+    unseen test dataset.
+
+----------------------------------------------------------------------
+
+10. hist_large_test.pdf
+----------------------------------------------------------------------
+
+Purpose:
+    Histogram of Dice scores for Large Frame (End-Diastole) segmentations
+    on the test dataset.
+
+Use:
+    Evaluates segmentation performance during the end-diastolic phase on
+    unseen data.
+
+----------------------------------------------------------------------
+
+11. hist_small_test.pdf
+----------------------------------------------------------------------
+
+Purpose:
+    Histogram of Dice scores for Small Frame (End-Systole) segmentations
+    on the test dataset.
+
+Use:
+    Evaluates segmentation performance during the end-systolic phase on
+    unseen data.
+
+----------------------------------------------------------------------
+
+Understanding Dice Score
+----------------------------------------------------------------------
+
+Dice Similarity Coefficient (DSC):
+
+    DSC = 2 × Intersection / (Prediction + Ground Truth)
+
+Range:
+    0.0 = No overlap
+    1.0 = Perfect overlap
+
+Typical interpretation:
+
+0.95-1.00
+    Excellent segmentation
+
+0.90-0.95
+    Very good segmentation
+
+0.80-0.90
+    Good segmentation
+
+Below 0.80
+    Poor segmentation
+
+----------------------------------------------------------------------
+
+Large vs Small Frames
+----------------------------------------------------------------------
+
+Large Frame:
+    End-Diastole (ED)
+    The left ventricle is at its largest volume.
+
+Small Frame:
+    End-Systole (ES)
+    The left ventricle is at its smallest volume.
+
+Overall Dice:
+    Combined Dice score using both ED and ES segmentations.
+
+----------------------------------------------------------------------
+
+Recommended files to report in research papers
+----------------------------------------------------------------------
+
+Required:
+    ✓ log.csv
+    ✓ test_dice.csv
+
+Recommended figures:
+    ✓ hist_overall_test.pdf
+
+Useful supplementary material:
+    ✓ val_dice.csv
+    ✓ hist_large_test.pdf
+    ✓ hist_small_test.pdf
+
+Normally not included in publications:
+    checkpoint.pt
+    best.pt
