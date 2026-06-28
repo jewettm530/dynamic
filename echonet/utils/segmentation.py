@@ -11,12 +11,20 @@ import skimage.draw
 import torch
 import torchvision
 import tqdm
-
 import echonet
+
+from echonet.utils.vit_segmentation_model import ViTSegmentationModel
 
 
 def _make_segmentation_model(modelname, pretrained):
     """Create torchvision segmentation model while avoiding aux classifier during training."""
+    
+    if modelname == "vit_base_patch16_224":
+        return ViTSegmentationModel(
+            model_name="vit_base_patch16_224",
+            pretrained=pretrained,
+            num_classes=1,
+        )
 
     if modelname == "deeplabv3_resnet50":
         if pretrained:

@@ -1,0 +1,22 @@
+
+==================================================
+EchoNet-Dynamic Segmentation Model Parameter Counts
+==================================================
+CNN: DeepLabV3-ResNet50            
+  Total parameters:     39,633,729
+  Trainable parameters: 39,633,729
+
+Standard ViT-Base image model      
+  Total parameters:     86,454,760
+  Trainable parameters: 86,454,760
+
+ViT segmentation model             
+  Total parameters:     87,715,073
+  Trainable parameters: 87,715,073
+
+Notes:
+- CNN count uses DeepLabV3-ResNet50 with a 1-channel LV segmentation head.
+- Standard ViT count is for model-complexity comparison only.
+- ViT segmentation count is the model that should be trained for the CNN vs ViT experiment.
+- Pretrained=True vs pretrained=False usually does not change parameter count.
+- Input size is set to 112x112 to match the EchoNet CNN segmentation setup.

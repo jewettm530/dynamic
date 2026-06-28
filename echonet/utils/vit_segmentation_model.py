@@ -25,6 +25,7 @@ class ViTSegmentationModel(nn.Module):
             pretrained=pretrained,
             features_only=True,
             out_indices=(-1,),
+            img_size=112,
         )
 
         feature_channels = self.encoder.feature_info.channels()[-1]
