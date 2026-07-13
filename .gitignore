@@ -37,4 +37,5 @@ outputs/
 *.pt
 test_output/
 *.log
-*.pkl
+*.pkl*.pth
+*.pt
