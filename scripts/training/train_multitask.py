@@ -310,10 +310,18 @@ def main():
         raise ValueError(
             "Images must have batch shape [B, 3, H, W]."
         )
-
     if sample_batch["mask"].ndim != 4:
         raise ValueError(
             "Masks must have batch shape [B, 1, H, W]."
+        )
+
+    if sample_batch["image"].shape[1] != 3:
+        raise ValueError(
+            "Images must have three channels: [B, 3, H, W]."
+        )
+    if sample_batch["mask"].shape[1] != 1:
+        raise ValueError(
+            "Masks must have one channel: [B, 1, H, W]."
         )
 
     best_dice = 0.0

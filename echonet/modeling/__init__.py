@@ -1,13 +1,9 @@
-"""
-The echonet package contains code for loading echocardiogram videos, and
-functions for training and testing segmentation and ejection fraction
-prediction models.
-"""
+"""Model definitions used by EchoNet experiments."""
 
-from echonet.__version__ import __version__
-from echonet.config import CONFIG as config
-import echonet.datasets as datasets
-import echonet.models as models
-import echonet.utils as utils
+from .multitask_deeplab import MultitaskDeepLabV3
+from .vit_segmentation_model import ViTSegmentationModel
 
-__all__ = ["__version__", "config", "datasets", "models", "utils"]
+__all__ = [
+    "MultitaskDeepLabV3",
+    "ViTSegmentationModel",
+]

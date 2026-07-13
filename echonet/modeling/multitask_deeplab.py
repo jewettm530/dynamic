@@ -48,8 +48,12 @@ class MultitaskDeepLabV3(nn.Module):
 
         self.base_model = deeplabv3_resnet50(
             weights=weights,
-            aux_loss=False,
+            aux_loss=True,
         )
+
+        # The pretrained weights require the auxiliary classifier to be created,
+        # but the multitask model does not use it.
+        self.base_model.aux_classifier = None
 
         # DeepLabV3's classifier produces 256 channels immediately before
         # its final class-prediction convolution.

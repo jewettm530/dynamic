@@ -80,12 +80,14 @@ def savevideo(filename: str, array: np.ndarray, fps: typing.Union[float, int] = 
     elif os.path.splitext(filename)[-1] == ".webm":
         fourcc = cv2.VideoWriter_fourcc(*'vp80')
     else:
-        asndksadnk
+        raise ValueError(
+            "Unsupported video extension. Use .avi, .mp4, or .webm."
+        )
     out = cv2.VideoWriter(filename, fourcc, fps, (width, height))
 
     for i in range(f):
         out.write(array[:, i, :, :].transpose((1, 2, 0)))
-
+    out.release()
 
 def get_mean_and_std(dataset: torch.utils.data.Dataset,
                      samples: int = 128,

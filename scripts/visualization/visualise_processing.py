@@ -1,10 +1,7 @@
 import os
-import sys
 import random
 import argparse
 import time
-
-sys.path.insert(0, DATA_DIR)
 
 import torch
 import torchvision
@@ -13,9 +10,6 @@ import matplotlib.pyplot as plt
 
 import echonet
 from echonet.paths import (
-    DATA_DIR,
-    VISUALIZATIONS_OUTPUT_DIR,
-    VIDEOS_DIR,
     EF_PROCESSING_VISUALIZATIONS_DIR,
     VIDEO_CHECKPOINTS_DIR,
 )
@@ -204,7 +198,7 @@ def main():
     parser.add_argument(
         "--device",
         type=str,
-        default="cpu",
+        default="cuda",
         choices=["cpu", "cuda"],
         help="Device to run prediction on."
     )

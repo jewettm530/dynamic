@@ -1,13 +1,10 @@
-"""
-The echonet package contains code for loading echocardiogram videos, and
-functions for training and testing segmentation and ejection fraction
-prediction models.
-"""
+"""Loss functions used by EchoNet experiments."""
 
-from echonet.__version__ import __version__
-from echonet.config import CONFIG as config
-import echonet.datasets as datasets
-import echonet.models as models
-import echonet.utils as utils
+from .multitask_loss import MultitaskLoss
+from .segmentation_losses import BCEDiceLoss, DiceLoss
 
-__all__ = ["__version__", "config", "datasets", "models", "utils"]
+__all__ = [
+    "BCEDiceLoss",
+    "DiceLoss",
+    "MultitaskLoss",
+]

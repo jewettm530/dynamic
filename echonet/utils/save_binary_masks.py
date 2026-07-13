@@ -1,8 +1,6 @@
-# add to 'utils' folder
-
-import os
 import torch
 from PIL import Image
+from pathlib import Path
 
 
 def save_binary_mask(logits, save_path, threshold=0.5):
@@ -12,8 +10,6 @@ def save_binary_mask(logits, save_path, threshold=0.5):
     Background = black, 0
     Object = white, 255
     """
-
-    from pathlib import Path
 
     save_path = Path(save_path).expanduser().resolve()
     save_path.parent.mkdir(parents=True, exist_ok=True)

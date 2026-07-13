@@ -13,7 +13,7 @@ import torchvision
 import tqdm
 import echonet
 
-from echonet.utils.vit_segmentation_model import ViTSegmentationModel
+from echonet.modeling.vit_segmentation_model import ViTSegmentationModel
 from pathlib import Path
 
 from echonet.paths import SEGMENTATION_OUTPUT_DIR
@@ -181,7 +181,7 @@ def run(
                     ds,
                     batch_size=batch_size,
                     num_workers=num_workers,
-                    shuffle=True,
+                    shuffle=(phase == "train"),
                     pin_memory=(device.type == "cuda"),
                     drop_last=(phase == "train")
                 )
