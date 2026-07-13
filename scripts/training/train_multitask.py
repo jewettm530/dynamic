@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import torch
@@ -13,10 +12,6 @@ from echonet.utils.metrics import (
     iou_score,
     classification_accuracy,
 )
-checkpoint_dir = Path("/data/jewettm/dynamic/checkpoints/multitask")
-checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
-best_checkpoint_path = checkpoint_dir / "best_multitask_deeplab.pt"
 
 class EchoMultitaskDataset(Dataset):
     """
@@ -92,56 +87,61 @@ class EchoMultitaskDataset(Dataset):
             "ef": ef,
         }
 
-def train_one_epoch(model, dataloader, optimizer, criterion, device):
-    model.train()
+import torch
+import torch.nn as nn
 
-    total_loss = 0.0
-    total_dice = 0.0
-    total_iou = 0.0
-    total_acc = 0.0
+from echonet.losses.segmentation_losses import (
+    BCEDiceLoss,
+    DiceLoss,
+)
 
-    for batch in dataloader:
-        images = batch["image"].to(
-        device=device,
-        dtype=torch.float32,
-        non_blocking=True,
-    )
 
-    masks = batch["mask"].to(
-        device=device,
-        dtype=torch.float32,
-        non_blocking=True,
-    )
+class MultitaskLoss(nn.Module):
+    def __init__(
+        self,
+        segmentation_loss: str = "bce_dice",
+        seg_weight: float = 1.0,
+        class_weight: float = 0.3,
+    ):
+        super().__init__()
 
-    labels = batch["label"].to(
-        device=device,
-        dtype=torch.long,
-        non_blocking=True,
-    )
+        if segmentation_loss == "bce":
+            self.segmentation_criterion = nn.BCEWithLogitsLoss()
+        elif segmentation_loss == "dice":
+            self.segmentation_criterion = DiceLoss()
+        elif segmentation_loss == "bce_dice":
+            self.segmentation_criterion = BCEDiceLoss()
+        else:
+            raise ValueError(
+                f"Unsupported segmentation loss: {segmentation_loss}"
+            )
 
-        optimizer.zero_grad()
+        self.classification_criterion = nn.CrossEntropyLoss()
 
-        outputs = model(images)
-        loss, loss_dict = criterion(outputs, masks, labels)
+        self.seg_weight = seg_weight
+        self.class_weight = class_weight
 
-        loss.backward()
-        optimizer.step()
+    def forward(self, outputs, masks, labels):
+        segmentation_loss = self.segmentation_criterion(
+            outputs["segmentation"],
+            masks,
+        )
 
-        total_loss += loss.item()
-        total_dice += dice_coefficient(outputs["segmentation"], masks)
-        total_iou += iou_score(outputs["segmentation"], masks)
-        total_acc += classification_accuracy(outputs["classification"], labels)
+        classification_loss = self.classification_criterion(
+            outputs["classification"],
+            labels,
+        )
 
-    n = len(dataloader)
-    if n == 0:
-        raise RuntimeError("The DataLoader contains no batches.")
+        total_loss = (
+            self.seg_weight * segmentation_loss
+            + self.class_weight * classification_loss
+        )
 
-    return {
-        "loss": total_loss / n,
-        "dice": total_dice / n,
-        "iou": total_iou / n,
-        "accuracy": total_acc / n
-    }
+        return total_loss, {
+            "total_loss": total_loss.detach().item(),
+            "segmentation_loss": segmentation_loss.detach().item(),
+            "classification_loss": classification_loss.detach().item(),
+        }
 
 
 def validate(model, dataloader, criterion, device):
@@ -155,32 +155,46 @@ def validate(model, dataloader, criterion, device):
     with torch.no_grad():
         for batch in dataloader:
             images = batch["image"].to(
-            device=device,
-            dtype=torch.float32,
-            non_blocking=True,
-        )
+                device=device,
+                dtype=torch.float32,
+                non_blocking=True,
+            )
 
-        masks = batch["mask"].to(
-            device=device,
-            dtype=torch.float32,
-            non_blocking=True,
-        )
+            masks = batch["mask"].to(
+                device=device,
+                dtype=torch.float32,
+                non_blocking=True,
+            )
 
-        labels = batch["label"].to(
-            device=device,
-            dtype=torch.long,
-            non_blocking=True,
-        )
+            labels = batch["label"].to(
+                device=device,
+                dtype=torch.long,
+                non_blocking=True,
+            )
 
             outputs = model(images)
-            loss, loss_dict = criterion(outputs, masks, labels)
+            loss, loss_dict = criterion(
+                outputs,
+                masks,
+                labels,
+            )
 
             total_loss += loss.item()
-            total_dice += dice_coefficient(outputs["segmentation"], masks)
-            total_iou += iou_score(outputs["segmentation"], masks)
-            total_acc += classification_accuracy(outputs["classification"], labels)
+            total_dice += dice_coefficient(
+                outputs["segmentation"],
+                masks,
+            )
+            total_iou += iou_score(
+                outputs["segmentation"],
+                masks,
+            )
+            total_acc += classification_accuracy(
+                outputs["classification"],
+                labels,
+            )
 
     n = len(dataloader)
+
     if n == 0:
         raise RuntimeError("The DataLoader contains no batches.")
 
@@ -188,7 +202,7 @@ def validate(model, dataloader, criterion, device):
         "loss": total_loss / n,
         "dice": total_dice / n,
         "iou": total_iou / n,
-        "accuracy": total_acc / n
+        "accuracy": total_acc / n,
     }
 
 
@@ -214,6 +228,9 @@ def main():
 
     project_root = Path("/data/jewettm/dynamic")
     data_root = project_root / "datasets"
+    checkpoint_dir = Path("/data/jewettm/dynamic/checkpoints/multitask")
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    best_checkpoint_path = checkpoint_dir / "best_multitask_deeplab.pt"
 
     if not data_root.exists():
         raise FileNotFoundError(
@@ -285,7 +302,6 @@ def main():
         )
 
     best_dice = 0.0
-    os.makedirs("outputs/checkpoints", exist_ok=True)
 
     for epoch in range(epochs):
         train_metrics = train_one_epoch(
@@ -309,18 +325,20 @@ def main():
 
         if val_metrics["dice"] > best_dice:
             best_dice = val_metrics["dice"]
+
             torch.save(
-            {
-                "epoch": epoch + 1,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "best_dice": best_dice,
-                "validation_metrics": val_metrics,
-                "ef_threshold": 40.0,
-            },
-            best_checkpoint_path,
+                {
+                    "epoch": epoch + 1,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "best_dice": best_dice,
+                    "validation_metrics": val_metrics,
+                    "ef_threshold": 40.0,
+                },
+                best_checkpoint_path,
             )
-            print("Saved new best model.")
+
+            print(f"Saved new best model to: {best_checkpoint_path}")
 
 
 if __name__ == "__main__":
