@@ -4,6 +4,7 @@ import math
 import os
 import time
 import random
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,6 +14,7 @@ import torchvision
 import tqdm
 
 import echonet
+from echonet.paths import VIDEO_OUTPUT_DIR
 
 
 def run(num_epochs=45,
@@ -37,8 +39,16 @@ def run(num_epochs=45,
 
     # Set default output directory
     if output is None:
-        output = os.path.join("output", "video", "{}_{}_{}_{}".format(modelname, frames, period, "pretrained" if pretrained else "random"))
-    os.makedirs(output, exist_ok=True)
+        output = VIDEO_OUTPUT_DIR / "{}_{}_{}_{}".format(
+            modelname,
+            frames,
+            period,
+            "pretrained" if pretrained else "random",
+        )
+    else:
+        output = Path(output)
+
+    output.mkdir(parents=True, exist_ok=True)
 
     # Set device for computations
     if device is None:

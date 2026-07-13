@@ -2,6 +2,7 @@ from PIL import Image
 import numpy as np
 from collections import Counter
 import sys
+from echonet.paths import VISUALIZATIONS_OUTPUT_DIR
 
 path = sys.argv[1]
 

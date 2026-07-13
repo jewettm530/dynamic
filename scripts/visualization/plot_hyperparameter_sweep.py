@@ -6,6 +6,7 @@ import os
 import matplotlib
 import matplotlib.pyplot as plt
 import echonet  # only for potential utils, but we define our own latexify here
+from echonet.paths import VISUALIZATIONS_OUTPUT_DIR
 
 def latexify():
     plt.rcParams.update({
@@ -130,9 +131,21 @@ def main(root=os.path.join("output", "video"),
     ax2.set_ylabel("Validation Loss")
 
     plt.tight_layout()
-    plt.savefig(os.path.join(fig_root, "hyperparameter.pdf"))
-    plt.savefig(os.path.join(fig_root, "hyperparameter.eps"))
-    plt.savefig(os.path.join(fig_root, "hyperparameter.png"))
+        plt.savefig(
+        VISUALIZATIONS_OUTPUT_DIR
+        / "hyperparameter_sweep.pdf",
+        bbox_inches="tight",
+    )
+    plt.savefig(
+        VISUALIZATIONS_OUTPUT_DIR
+        / "hyperparameter_sweep.eps",
+        bbox_inches="tight",
+    )
+    plt.savefig(
+        VISUALIZATIONS_OUTPUT_DIR
+        / "hyperparameter_sweep.png",
+        bbox_inches="tight",
+    )
     plt.close(fig)
 
 

@@ -14,6 +14,9 @@ import tqdm
 import echonet
 
 from echonet.utils.vit_segmentation_model import ViTSegmentationModel
+from pathlib import Path
+
+from echonet.paths import SEGMENTATION_OUTPUT_DIR
 
 
 def _make_segmentation_model(modelname, pretrained):
@@ -89,12 +92,14 @@ def run(
     torch.manual_seed(seed)
 
     if output is None:
-        output = os.path.join(
-            "output",
-            "segmentation",
-            "{}_{}".format(modelname, "pretrained" if pretrained else "random")
+        output = SEGMENTATION_OUTPUT_DIR / "{}_{}".format(
+            modelname,
+            "pretrained" if pretrained else "random",
         )
-    os.makedirs(output, exist_ok=True)
+    else:
+        output = Path(output)
+
+    output.mkdir(parents=True, exist_ok=True)
 
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

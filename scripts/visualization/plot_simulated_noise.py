@@ -13,6 +13,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import echonet.datasets  # for Echo dataset class
+from echonet.paths import VISUALIZATIONS_OUTPUT_DIR
 
 # ----------------------------------------------------------------------
 # Missing utility functions
@@ -178,9 +179,21 @@ def main(fig_root=os.path.join("figure", "noise"),
     ax[2].axis([min(NOISE_PCT)-5, max(NOISE_PCT)+5, -1, 1])
 
     plt.tight_layout()
-    plt.savefig(os.path.join(fig_root, "noise.pdf"), dpi=1200)
-    plt.savefig(os.path.join(fig_root, "noise.eps"), dpi=300)
-    plt.savefig(os.path.join(fig_root, "noise.png"), dpi=600)
+    plt.savefig(
+        VISUALIZATIONS_OUTPUT_DIR
+        / "simulated_noise.pdf",
+        bbox_inches="tight",
+    )
+    plt.savefig(
+        VISUALIZATIONS_OUTPUT_DIR
+        / "simulated_noise.eps",
+        bbox_inches="tight",
+    )
+    plt.savefig(
+        VISUALIZATIONS_OUTPUT_DIR
+        / "simulated_noise.png",
+        bbox_inches="tight",
+    )
     plt.close(fig)
 
 

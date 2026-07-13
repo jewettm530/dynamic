@@ -1,0 +1,57 @@
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+# Data
+DATA_DIR = PROJECT_ROOT / "datasets"
+VIDEOS_DIR = DATA_DIR / "Videos"
+FILE_LIST_PATH = DATA_DIR / "FileList.csv"
+VOLUME_TRACINGS_PATH = DATA_DIR / "VolumeTracings.csv"
+
+# Checkpoints
+CHECKPOINTS_DIR = PROJECT_ROOT / "checkpoints"
+VIDEO_CHECKPOINTS_DIR = CHECKPOINTS_DIR / "video"
+SEGMENTATION_CHECKPOINTS_DIR = CHECKPOINTS_DIR / "segmentation"
+MULTITASK_CHECKPOINTS_DIR = CHECKPOINTS_DIR / "multitask"
+LIGHTWEIGHT_CHECKPOINTS_DIR = CHECKPOINTS_DIR / "lightweight"
+
+# Outputs
+OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+
+VIDEO_OUTPUT_DIR = OUTPUTS_DIR / "video"
+SEGMENTATION_OUTPUT_DIR = OUTPUTS_DIR / "segmentation"
+MULTITASK_OUTPUT_DIR = OUTPUTS_DIR / "multitask"
+LIGHTWEIGHT_OUTPUT_DIR = OUTPUTS_DIR / "lightweight"
+
+LABELS_OUTPUT_DIR = OUTPUTS_DIR / "labels"
+LOGS_OUTPUT_DIR = OUTPUTS_DIR / "logs"
+MASKS_OUTPUT_DIR = OUTPUTS_DIR / "masks"
+METRICS_OUTPUT_DIR = OUTPUTS_DIR / "metrics"
+VISUALIZATIONS_OUTPUT_DIR = OUTPUTS_DIR / "visualizations"
+
+EF_PROCESSING_VISUALIZATIONS_DIR = (
+    VISUALIZATIONS_OUTPUT_DIR / "ef_processing"
+)
+
+
+def create_output_directories() -> None:
+    directories = [
+        VIDEO_CHECKPOINTS_DIR,
+        SEGMENTATION_CHECKPOINTS_DIR,
+        MULTITASK_CHECKPOINTS_DIR,
+        LIGHTWEIGHT_CHECKPOINTS_DIR,
+        VIDEO_OUTPUT_DIR,
+        SEGMENTATION_OUTPUT_DIR,
+        MULTITASK_OUTPUT_DIR,
+        LIGHTWEIGHT_OUTPUT_DIR,
+        LABELS_OUTPUT_DIR,
+        LOGS_OUTPUT_DIR,
+        MASKS_OUTPUT_DIR,
+        METRICS_OUTPUT_DIR,
+        VISUALIZATIONS_OUTPUT_DIR,
+        EF_PROCESSING_VISUALIZATIONS_DIR,
+    ]
+
+    for directory in directories:
+        directory.mkdir(parents=True, exist_ok=True)

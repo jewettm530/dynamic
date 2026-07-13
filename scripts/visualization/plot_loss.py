@@ -6,6 +6,7 @@ import argparse
 import os
 import matplotlib
 import matplotlib.pyplot as plt
+from echonet.paths import VISUALIZATIONS_OUTPUT_DIR
 
 def latexify():
     plt.rcParams.update({
@@ -43,7 +44,7 @@ def main():
     ax1 = fig.add_subplot(gs[0, 1], sharey=ax0)
     for pretrained in [True]:
         for idx, model in enumerate(["r2plus1d_18", "r3d_18", "mc3_18"]):
-            loss = load(os.path.join(args.dir, "video", f"{model}_{args.frames}_{args.period}_{'pretrained' if pretrained else 'random'}", "log.csv"))
+            loss = load(os.path.join(args.dir, "video", f"{model}_{args.frames}_{args.period}_{'pretrained' if pretrained else 'random'}", LOGS_OUTPUT_DIR / "segmentation_training.csv"))
             if loss is None:
                 continue
             ax0.plot(range(1, 1 + len(loss["train"])), loss["train"], "-" if pretrained else "--", color=colors[idx])
@@ -63,7 +64,7 @@ def main():
     ax1 = fig.add_subplot(gs[1, 1], sharey=ax0)
     pretrained = False
     model = "deeplabv3_resnet50"
-    loss = load(os.path.join(args.dir, "segmentation", f"{model}_{'pretrained' if pretrained else 'random'}", "log.csv"))
+    loss = load(os.path.join(args.dir, "segmentation", f"{model}_{'pretrained' if pretrained else 'random'}", LOGS_OUTPUT_DIR / "segmentation_training.csv"))
     if loss is not None:
         ax0.plot(range(1, 1 + len(loss["train"])), loss["train"], "--", color=colors[3])
         ax1.plot(range(1, 1 + len(loss["val"])), loss["val"], "--", color=colors[3])

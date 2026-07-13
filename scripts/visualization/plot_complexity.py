@@ -6,6 +6,7 @@ import os
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from echonet.paths import VISUALIZATIONS_OUTPUT_DIR
 
 # ----------------------------------------------------------------------
 # Local replacement for echonet.utils.latexify (if missing)
@@ -79,8 +80,14 @@ def main(root=os.path.join("timing", "video"),
     ax[1].set_ylabel("Memory Per Clip (GB)")
 
     plt.tight_layout()
-    plt.savefig(os.path.join(fig_root, "complexity.pdf"))
-    plt.savefig(os.path.join(fig_root, "complexity.eps"))
+    plt.savefig(
+        VISUALIZATIONS_OUTPUT_DIR / "model_complexity.pdf",
+        bbox_inches="tight",
+    )
+    plt.savefig(
+        VISUALIZATIONS_OUTPUT_DIR / "model_complexity.eps",
+        bbox_inches="tight",
+    )
     plt.close(fig)
 
 

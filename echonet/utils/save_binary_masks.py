@@ -13,7 +13,10 @@ def save_binary_mask(logits, save_path, threshold=0.5):
     Object = white, 255
     """
 
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    from pathlib import Path
+
+    save_path = Path(save_path).expanduser().resolve()
+    save_path.parent.mkdir(parents=True, exist_ok=True)
 
     probs = torch.sigmoid(logits)
     pred = (probs > threshold).float()
@@ -22,4 +25,4 @@ def save_binary_mask(logits, save_path, threshold=0.5):
     mask = (mask * 255).astype("uint8")
 
     image = Image.fromarray(mask, mode="L")
-    image.save(save_path)
+    image.save(str(save_path))

@@ -12,14 +12,16 @@ import argparse
 from pathlib import Path
 
 import pandas as pd
+from echonet.paths import (
+    FILE_LIST_PATH,
+    LABELS_OUTPUT_DIR,
+)
 
 
-DEFAULT_PROJECT_ROOT = Path("/data/jewettm/dynamic")
-DEFAULT_INPUT_PATH = DEFAULT_PROJECT_ROOT / "datasets" / "FileList.csv"
+DEFAULT_INPUT_PATH = FILE_LIST_PATH
+
 DEFAULT_OUTPUT_PATH = (
-    DEFAULT_PROJECT_ROOT
-    / "outputs"
-    / "labels"
+    LABELS_OUTPUT_DIR
     / "ef_classification_labels.csv"
 )
 

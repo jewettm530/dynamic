@@ -4,7 +4,7 @@ import random
 import argparse
 import time
 
-sys.path.insert(0, "/data/jewettm/dynamic")
+sys.path.insert(0, DATA_DIR)
 
 import torch
 import torchvision
@@ -12,6 +12,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import echonet
+from echonet.paths import (
+    DATA_DIR,
+    VISUALIZATIONS_OUTPUT_DIR,
+    VIDEOS_DIR,
+    EF_PROCESSING_VISUALIZATIONS_DIR,
+    VIDEO_CHECKPOINTS_DIR,
+)
 
 
 def strip_module_prefix(state_dict):
@@ -140,14 +147,14 @@ def main():
     parser.add_argument(
         "--checkpoint",
         type=str,
-        default="output/video/final_model/best.pt",
+        default=str(VIDEO_CHECKPOINTS_DIR / "best.pt"),
         help="Path to trained EF model checkpoint."
     )
 
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="output/visualizations/ef_processing",
+        default=str(EF_PROCESSING_VISUALIZATIONS_DIR),
         help="Directory to save visualization images."
     )
 

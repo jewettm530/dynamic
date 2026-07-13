@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import torch
 from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset
@@ -11,6 +9,13 @@ from echonet.utils.metrics import (
     dice_coefficient,
     iou_score,
     classification_accuracy,
+)
+from echonet.paths import (
+    DATA_DIR,
+    FILE_LIST_PATH,
+    MULTITASK_CHECKPOINTS_DIR,
+    VIDEOS_DIR,
+    VOLUME_TRACINGS_PATH,
 )
 
 class EchoMultitaskDataset(Dataset):
@@ -87,62 +92,66 @@ class EchoMultitaskDataset(Dataset):
             "ef": ef,
         }
 
-import torch
-import torch.nn as nn
+def train_one_epoch(model, dataloader, optimizer, criterion, device):
+    model.train()
 
-from echonet.losses.segmentation_losses import (
-    BCEDiceLoss,
-    DiceLoss,
-)
+    total_loss = 0.0
+    total_dice = 0.0
+    total_iou = 0.0
+    total_acc = 0.0
 
+    for batch in dataloader:
+        images = batch["image"].to(
+            device=device,
+            dtype=torch.float32,
+            non_blocking=True,
+        )
 
-class MultitaskLoss(nn.Module):
-    def __init__(
-        self,
-        segmentation_loss: str = "bce_dice",
-        seg_weight: float = 1.0,
-        class_weight: float = 0.3,
-    ):
-        super().__init__()
+        masks = batch["mask"].to(
+            device=device,
+            dtype=torch.float32,
+            non_blocking=True,
+        )
 
-        if segmentation_loss == "bce":
-            self.segmentation_criterion = nn.BCEWithLogitsLoss()
-        elif segmentation_loss == "dice":
-            self.segmentation_criterion = DiceLoss()
-        elif segmentation_loss == "bce_dice":
-            self.segmentation_criterion = BCEDiceLoss()
-        else:
-            raise ValueError(
-                f"Unsupported segmentation loss: {segmentation_loss}"
-            )
+        labels = batch["label"].to(
+            device=device,
+            dtype=torch.long,
+            non_blocking=True,
+        )
 
-        self.classification_criterion = nn.CrossEntropyLoss()
+        optimizer.zero_grad()
 
-        self.seg_weight = seg_weight
-        self.class_weight = class_weight
+        outputs = model(images)
+        loss, loss_dict = criterion(outputs, masks, labels)
 
-    def forward(self, outputs, masks, labels):
-        segmentation_loss = self.segmentation_criterion(
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        total_dice += dice_coefficient(
             outputs["segmentation"],
             masks,
         )
-
-        classification_loss = self.classification_criterion(
+        total_iou += iou_score(
+            outputs["segmentation"],
+            masks,
+        )
+        total_acc += classification_accuracy(
             outputs["classification"],
             labels,
         )
 
-        total_loss = (
-            self.seg_weight * segmentation_loss
-            + self.class_weight * classification_loss
-        )
+    n = len(dataloader)
 
-        return total_loss, {
-            "total_loss": total_loss.detach().item(),
-            "segmentation_loss": segmentation_loss.detach().item(),
-            "classification_loss": classification_loss.detach().item(),
-        }
+    if n == 0:
+        raise RuntimeError("The DataLoader contains no batches.")
 
+    return {
+        "loss": total_loss / n,
+        "dice": total_dice / n,
+        "iou": total_iou / n,
+        "accuracy": total_acc / n,
+    }
 
 def validate(model, dataloader, criterion, device):
     model.eval()
@@ -226,11 +235,17 @@ def main():
 
     optimizer = Adam(model.parameters(), lr=lr)
 
-    project_root = Path("/data/jewettm/dynamic")
-    data_root = project_root / "datasets"
-    checkpoint_dir = Path("/data/jewettm/dynamic/checkpoints/multitask")
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    best_checkpoint_path = checkpoint_dir / "best_multitask_deeplab.pt"
+    data_root = DATA_DIR
+
+    MULTITASK_CHECKPOINTS_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    best_checkpoint_path = (
+        MULTITASK_CHECKPOINTS_DIR
+        / "best_multitask_deeplab.pt"
+    )
 
     if not data_root.exists():
         raise FileNotFoundError(
@@ -238,9 +253,9 @@ def main():
         )
 
     required_files = [
-        data_root / "FileList.csv",
-        data_root / "VolumeTracings.csv",
-        data_root / "Videos",
+        FILE_LIST_PATH,
+        VOLUME_TRACINGS_PATH,
+        VIDEOS_DIR,
     ]
 
     for required_path in required_files:
