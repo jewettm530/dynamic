@@ -32,10 +32,10 @@ __pycache__/
 *.pyc
 *.swp
 echonet.egg-info/
-.DS_Storeoutputs/
+.DS_Store
 outputs/
-*.pt
 test_output/
 *.log
-*.pkl*.pth
+*.pkl
+*.pth
 *.pt

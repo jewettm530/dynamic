@@ -1,12 +1,96 @@
 import os
+from pathlib import Path
+
 import torch
-from torch.utils.data import DataLoader
 from torch.optim import Adam
+from torch.utils.data import DataLoader, Dataset
 
-from models.multitask_deeplab import MultitaskDeepLabV3
-from losses.multitask_loss import MultitaskLoss
-from utils.metrics import dice_coefficient, iou_score, classification_accuracy
+from echonet.datasets.echo import Echo
+from echonet.modeling.multitask_deeplab import MultitaskDeepLabV3
+from echonet.losses.multitask_loss import MultitaskLoss
+from echonet.utils.metrics import (
+    dice_coefficient,
+    iou_score,
+    classification_accuracy,
+)
+checkpoint_dir = Path("/data/jewettm/dynamic/checkpoints/multitask")
+checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
+best_checkpoint_path = checkpoint_dir / "best_multitask_deeplab.pt"
+
+class EchoMultitaskDataset(Dataset):
+    """
+    Wraps the existing EchoNet dataset so each item contains:
+    image:
+        End-diastolic frame, shape [3, H, W].
+    mask:
+        Binary LV segmentation mask, shape [1, H, W].
+    label:
+        Binary EF class:
+            0 = EF >= threshold
+            1 = EF < threshold
+    ef:
+        Original continuous EF value, retained for analysis.
+    """
+
+    def __init__(
+        self,
+        root: str,
+        split: str,
+        ef_threshold: float = 40.0,
+        mean: float = 0.0,
+        std: float = 1.0,
+    ):
+        self.ef_threshold = ef_threshold
+
+        self.dataset = Echo(
+            root=root,
+            split=split,
+            target_type=["LargeFrame", "LargeTrace", "EF"],
+            mean=mean,
+            std=std,
+            length=16,
+            period=2,
+            clips=1,
+        )
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        _, targets = self.dataset[index]
+
+        frame, mask, ef = targets
+
+        image = torch.as_tensor(frame, dtype=torch.float32)
+        mask = torch.as_tensor(mask, dtype=torch.float32)
+        ef = torch.as_tensor(ef, dtype=torch.float32)
+
+        # Model expects [C, H, W].
+        if image.ndim != 3:
+            raise ValueError(
+                f"Expected image shape [C, H, W], got {tuple(image.shape)}"
+            )
+
+        # BCE segmentation loss expects [1, H, W] per sample.
+        if mask.ndim == 2:
+            mask = mask.unsqueeze(0)
+
+        # Ensure the target remains binary.
+        mask = (mask > 0.5).float()
+
+        # CrossEntropyLoss requires an integer class index.
+        label = torch.tensor(
+            int(float(ef) < self.ef_threshold),
+            dtype=torch.long,
+        )
+
+        return {
+            "image": image,
+            "mask": mask,
+            "label": label,
+            "ef": ef,
+        }
 
 def train_one_epoch(model, dataloader, optimizer, criterion, device):
     model.train()
@@ -17,9 +101,23 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device):
     total_acc = 0.0
 
     for batch in dataloader:
-        images = batch["image"].to(device)
-        masks = batch["mask"].to(device)
-        labels = batch["label"].to(device)
+        images = batch["image"].to(
+        device=device,
+        dtype=torch.float32,
+        non_blocking=True,
+    )
+
+    masks = batch["mask"].to(
+        device=device,
+        dtype=torch.float32,
+        non_blocking=True,
+    )
+
+    labels = batch["label"].to(
+        device=device,
+        dtype=torch.long,
+        non_blocking=True,
+    )
 
         optimizer.zero_grad()
 
@@ -35,6 +133,8 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device):
         total_acc += classification_accuracy(outputs["classification"], labels)
 
     n = len(dataloader)
+    if n == 0:
+        raise RuntimeError("The DataLoader contains no batches.")
 
     return {
         "loss": total_loss / n,
@@ -54,9 +154,23 @@ def validate(model, dataloader, criterion, device):
 
     with torch.no_grad():
         for batch in dataloader:
-            images = batch["image"].to(device)
-            masks = batch["mask"].to(device)
-            labels = batch["label"].to(device)
+            images = batch["image"].to(
+            device=device,
+            dtype=torch.float32,
+            non_blocking=True,
+        )
+
+        masks = batch["mask"].to(
+            device=device,
+            dtype=torch.float32,
+            non_blocking=True,
+        )
+
+        labels = batch["label"].to(
+            device=device,
+            dtype=torch.long,
+            non_blocking=True,
+        )
 
             outputs = model(images)
             loss, loss_dict = criterion(outputs, masks, labels)
@@ -67,6 +181,8 @@ def validate(model, dataloader, criterion, device):
             total_acc += classification_accuracy(outputs["classification"], labels)
 
     n = len(dataloader)
+    if n == 0:
+        raise RuntimeError("The DataLoader contains no batches.")
 
     return {
         "loss": total_loss / n,
@@ -96,23 +212,77 @@ def main():
 
     optimizer = Adam(model.parameters(), lr=lr)
 
-    # Replace these with your real dataset objects
-    train_dataset = None
-    val_dataset = None
+    project_root = Path("/data/jewettm/dynamic")
+    data_root = project_root / "datasets"
+
+    if not data_root.exists():
+        raise FileNotFoundError(
+            f"Dataset directory was not found: {data_root}"
+        )
+
+    required_files = [
+        data_root / "FileList.csv",
+        data_root / "VolumeTracings.csv",
+        data_root / "Videos",
+    ]
+
+    for required_path in required_files:
+        if not required_path.exists():
+            raise FileNotFoundError(
+                f"Required EchoNet dataset item was not found: {required_path}"
+            )
+
+    train_dataset = EchoMultitaskDataset(
+        root=str(data_root),
+        split="train",
+        ef_threshold=40.0,
+    )
+
+    val_dataset = EchoMultitaskDataset(
+        root=str(data_root),
+        split="val",
+        ef_threshold=40.0,
+    )
+
+    print(f"Training samples:   {len(train_dataset):,}")
+    print(f"Validation samples: {len(val_dataset):,}")
+
+    pin_memory = device.type == "cuda"
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=4,
         shuffle=True,
-        num_workers=4
+        num_workers=4,
+        pin_memory=pin_memory,
+        persistent_workers=True,
     )
 
     val_loader = DataLoader(
         val_dataset,
         batch_size=4,
         shuffle=False,
-        num_workers=4
+        num_workers=4,
+        pin_memory=pin_memory,
+        persistent_workers=True,
     )
+
+    sample_batch = next(iter(train_loader))
+
+    print("Batch image shape:", sample_batch["image"].shape)
+    print("Batch mask shape:", sample_batch["mask"].shape)
+    print("Batch label shape:", sample_batch["label"].shape)
+    print("Batch EF values:", sample_batch["ef"][:4])
+
+    if sample_batch["image"].ndim != 4:
+        raise ValueError(
+            "Images must have batch shape [B, 3, H, W]."
+        )
+
+    if sample_batch["mask"].ndim != 4:
+        raise ValueError(
+            "Masks must have batch shape [B, 1, H, W]."
+        )
 
     best_dice = 0.0
     os.makedirs("outputs/checkpoints", exist_ok=True)
@@ -140,8 +310,15 @@ def main():
         if val_metrics["dice"] > best_dice:
             best_dice = val_metrics["dice"]
             torch.save(
-                model.state_dict(),
-                "outputs/checkpoints/best_multitask_deeplab.pt"
+            {
+                "epoch": epoch + 1,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "best_dice": best_dice,
+                "validation_metrics": val_metrics,
+                "ef_threshold": 40.0,
+            },
+            best_checkpoint_path,
             )
             print("Saved new best model.")
 
