@@ -168,6 +168,7 @@ def run(
         checkpoint = torch.load(
             weights,
             map_location=device,
+            weights_only=False,
         )
         state_dict = checkpoint.get(
             "state_dict",
@@ -261,6 +262,7 @@ def run(
         checkpoint = torch.load(
             checkpoint_path,
             map_location=device,
+            weights_only=False,
         )
 
         model.load_state_dict(checkpoint["state_dict"])
@@ -394,6 +396,7 @@ def run(
         checkpoint = torch.load(
             best_checkpoint_path,
             map_location=device,
+            weights_only=False,
         )
         model.load_state_dict(checkpoint["state_dict"])
 
