@@ -131,7 +131,7 @@ def main(root=os.path.join("output", "video"),
     ax2.set_ylabel("Validation Loss")
 
     plt.tight_layout()
-        plt.savefig(
+    plt.savefig(
         VISUALIZATIONS_OUTPUT_DIR
         / "hyperparameter_sweep.pdf",
         bbox_inches="tight",
