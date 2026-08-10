@@ -11,15 +11,17 @@ venv/
 # 2. Large Datasets & Heavy Outputs (CRITICAL for GPU Storage)
 # ==============================================================================
 # Your new dedicated storage folders
-datasets/
-checkpoints/
+/datasets/
+/output/
+/outputs/
+/checkpoints/
+/test_output/
 
 # Existing data rules from your original file
 echonet.cfg
 .echonet.cfg
 echonet_data/
 *.avi
-*.csv
 *.mp4
 *.tar.gz
 *.zip
@@ -31,10 +33,10 @@ echonet_data/
 __pycache__/
 *.pyc
 *.swp
-echonet.egg-info/
+/build/
+/dist/
+*.egg-info/
 .DS_Store
-outputs/
-test_output/
 *.log
 *.pkl
 *.pth

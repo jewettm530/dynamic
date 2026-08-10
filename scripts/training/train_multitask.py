@@ -1,51 +1,29 @@
-"""
-train_multitask.py
-
-Train a multitask DeepLabV3 model on EchoNet-Dynamic.
+#!/usr/bin/env python3
+"""Train the Stage 1 naive multi-task EchoNet-Dynamic baseline.
 
 Tasks
 -----
-1. Segment the left ventricle on:
-   - Large/end-diastolic frames
-   - Small/end-systolic frames
-2. Classify reduced ejection fraction:
-   - 0 = EF >= EF_THRESHOLD
-   - 1 = EF < EF_THRESHOLD
+* EF: continuous regression on the native 0-100 percentage scale.
+* LV segmentation: binary masks on labeled ED (Large) and ES (Small) frames.
 
-Outputs
--------
-output/comparison/multitask_25_epochs/
-    checkpoint.pt
-    best.pt
-    training_history.csv
-    validation_metrics.csv
-
-Metric aggregation
-------------------
-Segmentation metrics are calculated from global pixel-level confusion counts
-for the entire epoch. Metrics are reported for:
-    - overall: large and small frames combined
-    - large: end-diastolic frames
-    - small: end-systolic frames
-
-Classification metrics are patient-level. The positive-class probabilities
-from each patient's large and small frames are averaged before calculating
-accuracy, precision, recall, F1, specificity, ROC-AUC, and confusion counts.
-
-This script requires:
-    echonet/utils/evaluation_metrics.py
-
-That module must provide:
-    BinaryMetricAccumulator
+Checkpoint rule
+---------------
+The single best checkpoint is selected ONLY by lowest validation EF MAE.
+All segmentation metrics reported for that run come from the same checkpoint.
+The test set is intentionally not constructed or evaluated here.
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
-import math
+import json
+import os
+import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+from typing import Dict, List, Optional
 
 import numpy as np
 import torch
@@ -55,92 +33,24 @@ from torch.utils.data import DataLoader, Dataset
 from echonet.datasets.echo import Echo
 from echonet.losses.multitask_loss import MultitaskLoss
 from echonet.modeling.multitask_deeplab import MultitaskDeepLabV3
-from echonet.paths import (
-    DATA_DIR,
-    FILE_LIST_PATH,
-    VIDEOS_DIR,
-    VOLUME_TRACINGS_PATH,
+from echonet.utils.reproducibility import make_generator, seed_everything, seed_worker
+from echonet.utils.stage1_metrics import (
+    dice_score,
+    hd95_pixels,
+    regression_metrics,
+    summarize_segmentation,
 )
-from echonet.utils.evaluation_metrics import BinaryMetricAccumulator
-
-
-MODEL_NAME = "multitask_deeplabv3_resnet50"
-
-NUM_CLASSES = 2
-EPOCHS = 25
-LEARNING_RATE = 1e-4
-BATCH_SIZE = 4
-NUM_WORKERS = 4
-EF_THRESHOLD = 40.0
-
-SEGMENTATION_THRESHOLD = 0.5
-SEGMENTATION_AUC_SAMPLES = 1_000_000
-FRAME_AUC_SAMPLES = 500_000
-CLASSIFICATION_AUC_SAMPLES = 100_000
-
-OUTPUT_DIR = Path("output/comparison/multitask_25_epochs")
-CHECKPOINT_PATH = OUTPUT_DIR / "checkpoint.pt"
-BEST_CHECKPOINT_PATH = OUTPUT_DIR / "best.pt"
-HISTORY_PATH = OUTPUT_DIR / "training_history.csv"
-VALIDATION_METRICS_PATH = OUTPUT_DIR / "validation_metrics.csv"
-
-
-HISTORY_COLUMNS = [
-    "model",
-    "epoch",
-    "phase",
-    "frame_type",
-    "total_loss",
-    "segmentation_loss",
-    "classification_loss",
-    "dice",
-    "iou",
-    "accuracy",
-    "precision",
-    "recall",
-    "f1",
-    "specificity",
-    "roc_auc",
-    "tn",
-    "fp",
-    "fn",
-    "tp",
-    "elapsed_seconds",
-    "number_of_patients",
-    "number_of_frames",
-    "peak_gpu_memory_allocated",
-    "peak_gpu_memory_reserved",
-    "batch_size",
-]
 
 
 class EchoMultitaskDataset(Dataset):
-    """
-    Return large/small frames, masks, EF class, and continuous EF.
+    """Return paired ED/ES labeled frames plus one continuous EF target."""
 
-    Each item has:
-        large_image: [3, H, W]
-        small_image: [3, H, W]
-        large_mask:  [1, H, W]
-        small_mask:  [1, H, W]
-        label:       scalar class index
-        ef:          scalar EF value
-    """
-
-    def __init__(
-        self,
-        root: str,
-        split: str,
-        ef_threshold: float = EF_THRESHOLD,
-        mean: float = 0.0,
-        std: float = 1.0,
-    ) -> None:
-        self.ef_threshold = ef_threshold
-
+    def __init__(self, root: str, split: str, mean=0.0, std=1.0):
         self.dataset = Echo(
             root=root,
             split=split,
             target_type=[
+                "Filename",
                 "LargeFrame",
                 "SmallFrame",
                 "LargeTrace",
@@ -152,863 +62,321 @@ class EchoMultitaskDataset(Dataset):
             length=16,
             period=2,
             clips=1,
+            pad=None,
+            noise=None,
         )
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.dataset)
 
-    @staticmethod
-    def _prepare_frame(frame: Any) -> torch.Tensor:
-        image = torch.as_tensor(
-            frame,
-            dtype=torch.float32,
-        )
-
-        if image.ndim != 3:
-            raise ValueError(
-                "Expected a frame with shape [C, H, W], "
-                f"but received {tuple(image.shape)}."
-            )
-
-        if image.shape[0] != 3:
-            raise ValueError(
-                "Expected a three-channel frame with shape [3, H, W], "
-                f"but received {tuple(image.shape)}."
-            )
-
-        return image
-
-    @staticmethod
-    def _prepare_mask(mask: Any) -> torch.Tensor:
-        mask_tensor = torch.as_tensor(
-            mask,
-            dtype=torch.float32,
-        )
-
-        if mask_tensor.ndim == 2:
-            mask_tensor = mask_tensor.unsqueeze(0)
-
-        if mask_tensor.ndim != 3:
-            raise ValueError(
-                "Expected a mask with shape [1, H, W], "
-                f"but received {tuple(mask_tensor.shape)}."
-            )
-
-        if mask_tensor.shape[0] != 1:
-            raise ValueError(
-                "Expected a one-channel mask with shape [1, H, W], "
-                f"but received {tuple(mask_tensor.shape)}."
-            )
-
-        return (mask_tensor > 0.5).float()
-
-    def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, index):
         _, targets = self.dataset[index]
+        filename, ed_frame, es_frame, ed_mask, es_mask, ef = targets
 
-        (
-            large_frame,
-            small_frame,
-            large_mask,
-            small_mask,
-            ef,
-        ) = targets
-
-        ef_tensor = torch.as_tensor(
-            ef,
-            dtype=torch.float32,
-        )
-
-        label = torch.tensor(
-            int(float(ef_tensor) < self.ef_threshold),
-            dtype=torch.long,
-        )
+        ed_frame = torch.as_tensor(ed_frame, dtype=torch.float32)
+        es_frame = torch.as_tensor(es_frame, dtype=torch.float32)
+        ed_mask = torch.as_tensor(ed_mask, dtype=torch.float32).unsqueeze(0)
+        es_mask = torch.as_tensor(es_mask, dtype=torch.float32).unsqueeze(0)
 
         return {
-            "large_image": self._prepare_frame(large_frame),
-            "small_image": self._prepare_frame(small_frame),
-            "large_mask": self._prepare_mask(large_mask),
-            "small_mask": self._prepare_mask(small_mask),
-            "label": label,
-            "ef": ef_tensor,
+            "filename": filename,
+            "ed_image": ed_frame,
+            "es_image": es_frame,
+            "ed_mask": (ed_mask > 0.5).float(),
+            "es_mask": (es_mask > 0.5).float(),
+            "ef": torch.tensor(float(ef), dtype=torch.float32),
         }
 
 
-def _as_float(value: Any) -> float:
-    """Convert a scalar tensor or numeric value to float."""
-    if torch.is_tensor(value):
-        return float(value.detach().item())
-
-    return float(value)
-
-
-def _find_loss_component(
-    loss_dict: Mapping[str, Any],
-    possible_names: Sequence[str],
-) -> float:
-    """
-    Retrieve a loss component while tolerating minor key-name differences.
-
-    Returns NaN when none of the possible names is present.
-    """
-    for name in possible_names:
-        if name in loss_dict:
-            return _as_float(loss_dict[name])
-
-    return float("nan")
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--data-root", required=True, help="EchoNet dataset root")
+    p.add_argument("--output", required=True, help="Run output directory")
+    p.add_argument("--seed", type=int, required=True, choices=[42, 2026, 3407])
+    p.add_argument("--ef-weight", type=float, required=True)
+    p.add_argument("--seg-weight", type=float, required=True)
+    p.add_argument("--epochs", type=int, default=25)
+    p.add_argument("--batch-size", type=int, default=4)
+    p.add_argument("--num-workers", type=int, default=4)
+    p.add_argument("--learning-rate", type=float, default=1e-4)
+    p.add_argument("--weight-decay", type=float, default=0.0)
+    p.add_argument("--regression-hidden-dim", type=int, default=256)
+    p.add_argument("--dropout", type=float, default=0.3)
+    p.add_argument("--no-pretrained", action="store_true")
+    p.add_argument("--non-deterministic", action="store_true")
+    return p.parse_args()
 
 
-def _mean_or_nan(total: float, count: int) -> float:
-    if count == 0:
-        return float("nan")
+def git_commit() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except Exception:
+        return "unknown"
 
-    return total / count
+
+def device_metadata() -> Dict[str, object]:
+    info: Dict[str, object] = {
+        "python": sys.version.replace("\n", " "),
+        "torch": torch.__version__,
+        "torch_cuda_runtime": torch.version.cuda,
+        "cuda_available": torch.cuda.is_available(),
+        "cuda_device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+    }
+    if torch.cuda.is_available():
+        info["cuda_devices"] = [
+            torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())
+        ]
+        info["cudnn"] = torch.backends.cudnn.version()
+    return info
 
 
-def run_multitask_epoch(
-    model: torch.nn.Module,
-    dataloader: DataLoader,
-    criterion: torch.nn.Module,
-    device: torch.device,
-    optimizer: Optional[torch.optim.Optimizer] = None,
-) -> Dict[str, Any]:
-    """
-    Run one training or validation epoch.
-
-    Passing optimizer=None performs evaluation without gradient updates.
-    """
-    is_training = optimizer is not None
-    model.train(is_training)
-
-    total_loss = 0.0
-    total_segmentation_loss = 0.0
-    total_classification_loss = 0.0
-
-    segmentation_loss_batches = 0
-    classification_loss_batches = 0
-    number_of_batches = 0
-    number_of_patients = 0
-
-    overall_segmentation = BinaryMetricAccumulator(
-        threshold=SEGMENTATION_THRESHOLD,
-        max_auc_samples=SEGMENTATION_AUC_SAMPLES,
-        seed=0,
+def make_loader(dataset, batch_size, num_workers, shuffle, seed, device):
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=(device.type == "cuda"),
+        persistent_workers=(num_workers > 0),
+        worker_init_fn=seed_worker,
+        generator=make_generator(seed),
+        drop_last=False,
     )
 
-    large_segmentation = BinaryMetricAccumulator(
-        threshold=SEGMENTATION_THRESHOLD,
-        max_auc_samples=FRAME_AUC_SAMPLES,
-        seed=1,
-    )
 
-    small_segmentation = BinaryMetricAccumulator(
-        threshold=SEGMENTATION_THRESHOLD,
-        max_auc_samples=FRAME_AUC_SAMPLES,
-        seed=2,
-    )
+def run_epoch(
+    model,
+    loader,
+    criterion,
+    device,
+    optimizer: Optional[torch.optim.Optimizer],
+    compute_hd95: bool,
+):
+    training = optimizer is not None
+    model.train(training)
 
-    patient_classification = BinaryMetricAccumulator(
-        threshold=0.5,
-        max_auc_samples=CLASSIFICATION_AUC_SAMPLES,
-        seed=3,
-    )
+    sums = {
+        "raw_ef_loss": 0.0,
+        "raw_seg_loss": 0.0,
+        "weighted_ef_loss": 0.0,
+        "weighted_seg_loss": 0.0,
+        "total_loss": 0.0,
+    }
+    loss_weight = 0
 
+    ef_targets: List[float] = []
+    ef_predictions: List[float] = []
+    filenames: List[str] = []
+    ed_dice: List[float] = []
+    es_dice: List[float] = []
+    ed_hd95: List[float] = []
+    es_hd95: List[float] = []
+
+    started = time.time()
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
 
-    started_at = time.time()
+    with torch.set_grad_enabled(training):
+        for batch in loader:
+            ed_images = batch["ed_image"].to(device, non_blocking=True)
+            es_images = batch["es_image"].to(device, non_blocking=True)
+            ed_masks = batch["ed_mask"].to(device, non_blocking=True)
+            es_masks = batch["es_mask"].to(device, non_blocking=True)
+            ef = batch["ef"].to(device, non_blocking=True)
+            b = ef.shape[0]
 
-    with torch.set_grad_enabled(is_training):
-        for batch in dataloader:
-            large_images = batch["large_image"].to(
-                device=device,
-                dtype=torch.float32,
-                non_blocking=True,
-            )
+            images = torch.cat([ed_images, es_images], dim=0)
+            masks = torch.cat([ed_masks, es_masks], dim=0)
 
-            small_images = batch["small_image"].to(
-                device=device,
-                dtype=torch.float32,
-                non_blocking=True,
-            )
-
-            large_masks = batch["large_mask"].to(
-                device=device,
-                dtype=torch.float32,
-                non_blocking=True,
-            )
-
-            small_masks = batch["small_mask"].to(
-                device=device,
-                dtype=torch.float32,
-                non_blocking=True,
-            )
-
-            labels = batch["label"].to(
-                device=device,
-                dtype=torch.long,
-                non_blocking=True,
-            )
-
-            current_batch_size = labels.shape[0]
-
-            # One forward pass processes both cardiac phases.
-            images = torch.cat(
-                [large_images, small_images],
-                dim=0,
-            )
-
-            masks = torch.cat(
-                [large_masks, small_masks],
-                dim=0,
-            )
-
-            # Each frame inherits its patient's EF class during optimization.
-            repeated_labels = torch.cat(
-                [labels, labels],
-                dim=0,
-            )
-
-            if is_training:
+            if training:
                 optimizer.zero_grad(set_to_none=True)
 
             outputs = model(images)
+            frame_ef = outputs["ef"].reshape(-1)
+            video_ef = (frame_ef[:b] + frame_ef[b:]) / 2.0
 
-            if "segmentation" not in outputs:
-                raise KeyError(
-                    "The model output must contain a 'segmentation' tensor."
-                )
-
-            if "classification" not in outputs:
-                raise KeyError(
-                    "The model output must contain a 'classification' tensor."
-                )
-
-            loss, loss_dict = criterion(
-                outputs,
-                masks,
-                repeated_labels,
+            loss, components = criterion(
+                segmentation_logits=outputs["segmentation"],
+                segmentation_targets=masks,
+                ef_predictions=video_ef,
+                ef_targets=ef,
             )
 
-            if is_training:
+            if training:
                 loss.backward()
                 optimizer.step()
 
-            segmentation_logits = outputs["segmentation"]
+            for key in sums:
+                sums[key] += components[key] * b
+            loss_weight += b
 
-            if segmentation_logits.ndim == 3:
-                segmentation_logits = segmentation_logits.unsqueeze(1)
+            probs = torch.sigmoid(outputs["segmentation"]).detach().cpu().numpy()
+            truth = masks.detach().cpu().numpy()
+            ed_probs, es_probs = probs[:b, 0], probs[b:, 0]
+            ed_truth, es_truth = truth[:b, 0], truth[b:, 0]
 
-            if segmentation_logits.shape != masks.shape:
-                raise ValueError(
-                    "Segmentation output and mask shapes do not match: "
-                    f"{tuple(segmentation_logits.shape)} versus "
-                    f"{tuple(masks.shape)}."
-                )
+            for p, t in zip(ed_probs, ed_truth):
+                pred = p >= 0.5
+                true = t >= 0.5
+                ed_dice.append(dice_score(pred, true))
+                if compute_hd95:
+                    ed_hd95.append(hd95_pixels(pred, true))
+            for p, t in zip(es_probs, es_truth):
+                pred = p >= 0.5
+                true = t >= 0.5
+                es_dice.append(dice_score(pred, true))
+                if compute_hd95:
+                    es_hd95.append(hd95_pixels(pred, true))
 
-            segmentation_probabilities = torch.sigmoid(
-                segmentation_logits
-            )
+            ef_targets.extend(ef.detach().cpu().numpy().reshape(-1).tolist())
+            ef_predictions.extend(video_ef.detach().cpu().numpy().reshape(-1).tolist())
+            filenames.extend(list(batch["filename"]))
 
-            large_probabilities = segmentation_probabilities[
-                :current_batch_size
-            ]
+    reg = regression_metrics(ef_targets, ef_predictions)
 
-            small_probabilities = segmentation_probabilities[
-                current_batch_size:
-            ]
-
-            overall_segmentation.update(
-                probabilities=segmentation_probabilities,
-                targets=masks,
-            )
-
-            large_segmentation.update(
-                probabilities=large_probabilities,
-                targets=large_masks,
-            )
-
-            small_segmentation.update(
-                probabilities=small_probabilities,
-                targets=small_masks,
-            )
-
-            classification_logits = outputs["classification"]
-
-            if (
-                classification_logits.ndim != 2
-                or classification_logits.shape[1] != NUM_CLASSES
-            ):
-                raise ValueError(
-                    "Expected classification logits with shape [2B, 2], "
-                    f"but received {tuple(classification_logits.shape)}."
-                )
-
-            frame_positive_probabilities = torch.softmax(
-                classification_logits,
-                dim=1,
-            )[:, 1]
-
-            large_class_probabilities = (
-                frame_positive_probabilities[:current_batch_size]
-            )
-
-            small_class_probabilities = (
-                frame_positive_probabilities[current_batch_size:]
-            )
-
-            # Evaluate classification once per patient rather than counting
-            # the large and small frames as two independent patients.
-            patient_positive_probabilities = (
-                large_class_probabilities
-                + small_class_probabilities
-            ) / 2.0
-
-            patient_classification.update(
-                probabilities=patient_positive_probabilities,
-                targets=labels,
-            )
-
-            total_loss += _as_float(loss)
-
-            segmentation_loss = _find_loss_component(
-                loss_dict,
-                (
-                    "segmentation_loss",
-                    "seg_loss",
-                    "segmentation",
-                    "loss_segmentation",
-                ),
-            )
-
-            classification_loss = _find_loss_component(
-                loss_dict,
-                (
-                    "classification_loss",
-                    "class_loss",
-                    "cls_loss",
-                    "classification",
-                    "loss_classification",
-                ),
-            )
-
-            if math.isfinite(segmentation_loss):
-                total_segmentation_loss += segmentation_loss
-                segmentation_loss_batches += 1
-
-            if math.isfinite(classification_loss):
-                total_classification_loss += classification_loss
-                classification_loss_batches += 1
-
-            number_of_batches += 1
-            number_of_patients += current_batch_size
-
-    if number_of_batches == 0:
-        raise RuntimeError("The DataLoader contains no batches.")
-
-    elapsed_seconds = time.time() - started_at
-
-    if device.type == "cuda":
-        peak_gpu_memory_allocated = int(
-            torch.cuda.max_memory_allocated(device)
-        )
-        peak_gpu_memory_reserved = int(
-            torch.cuda.max_memory_reserved(device)
-        )
+    if compute_hd95:
+        seg = summarize_segmentation(ed_dice, es_dice, ed_hd95, es_hd95)
     else:
-        peak_gpu_memory_allocated = 0
-        peak_gpu_memory_reserved = 0
+        dice_ed = float(np.mean(ed_dice))
+        dice_es = float(np.mean(es_dice))
+        seg = {
+            "dice_ed": dice_ed,
+            "dice_es": dice_es,
+            "mean_dice": (dice_ed + dice_es) / 2.0,
+            "hd95_ed": float("nan"),
+            "hd95_es": float("nan"),
+            "mean_hd95": float("nan"),
+        }
 
-    return {
-        "losses": {
-            "total_loss": total_loss / number_of_batches,
-            "segmentation_loss": _mean_or_nan(
-                total_segmentation_loss,
-                segmentation_loss_batches,
-            ),
-            "classification_loss": _mean_or_nan(
-                total_classification_loss,
-                classification_loss_batches,
-            ),
-        },
-        "overall": overall_segmentation.compute(),
-        "large": large_segmentation.compute(),
-        "small": small_segmentation.compute(),
-        "classification": patient_classification.compute(),
-        "metadata": {
-            "elapsed_seconds": elapsed_seconds,
-            "number_of_patients": number_of_patients,
-            "number_of_frames": number_of_patients * 2,
-            "peak_gpu_memory_allocated": peak_gpu_memory_allocated,
-            "peak_gpu_memory_reserved": peak_gpu_memory_reserved,
-            "batch_size": dataloader.batch_size,
-        },
-    }
-
-
-def _base_history_row(
-    epoch: int,
-    phase: str,
-    frame_type: str,
-    result: Mapping[str, Any],
-) -> Dict[str, Any]:
-    losses = result["losses"]
-    metadata = result["metadata"]
-
-    return {
-        "model": MODEL_NAME,
-        "epoch": epoch,
-        "phase": phase,
-        "frame_type": frame_type,
-        "total_loss": losses["total_loss"],
-        "segmentation_loss": losses["segmentation_loss"],
-        "classification_loss": losses["classification_loss"],
-        "elapsed_seconds": metadata["elapsed_seconds"],
-        "number_of_patients": metadata["number_of_patients"],
-        "number_of_frames": metadata["number_of_frames"],
-        "peak_gpu_memory_allocated": metadata[
-            "peak_gpu_memory_allocated"
-        ],
-        "peak_gpu_memory_reserved": metadata[
-            "peak_gpu_memory_reserved"
-        ],
-        "batch_size": metadata["batch_size"],
-    }
-
-
-def segmentation_history_row(
-    epoch: int,
-    phase: str,
-    frame_type: str,
-    result: Mapping[str, Any],
-) -> Dict[str, Any]:
-    metrics = result[frame_type]
-
-    row = _base_history_row(
-        epoch=epoch,
-        phase=phase,
-        frame_type=frame_type,
-        result=result,
+    metrics = {key: sums[key] / max(loss_weight, 1) for key in sums}
+    metrics.update(reg)
+    metrics.update(seg)
+    metrics["n_videos"] = len(ef_targets)
+    metrics["elapsed_seconds"] = time.time() - started
+    metrics["peak_gpu_memory_allocated"] = (
+        int(torch.cuda.max_memory_allocated(device)) if device.type == "cuda" else 0
     )
 
-    row.update(
+    predictions = [
+        {"filename": f, "ef_target": y, "ef_prediction": yhat}
+        for f, y, yhat in zip(filenames, ef_targets, ef_predictions)
+    ]
+    return metrics, predictions
+
+
+def write_csv(path: Path, rows: List[dict]):
+    if not rows:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def main():
+    args = parse_args()
+    seed_everything(args.seed, deterministic=not args.non_deterministic)
+
+    data_root = Path(args.data_root).resolve()
+    output = Path(args.output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+
+    for required in ["FileList.csv", "VolumeTracings.csv", "Videos"]:
+        if not (data_root / required).exists():
+            raise FileNotFoundError(data_root / required)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    config = vars(args).copy()
+    config.update(
         {
-            "dice": metrics["dice"],
-            "iou": metrics["iou"],
-            "accuracy": metrics["accuracy"],
-            "precision": metrics["precision"],
-            "recall": metrics["recall"],
-            "f1": metrics["f1"],
-            "specificity": metrics["specificity"],
-            "roc_auc": metrics["roc_auc"],
-            "tn": metrics["tn"],
-            "fp": metrics["fp"],
-            "fn": metrics["fn"],
-            "tp": metrics["tp"],
+            "task": "multitask",
+            "ef_target_scale": "0-100 percentage points",
+            "ef_loss": "MSELoss(mean)",
+            "segmentation_loss": "BCEWithLogitsLoss(mean)",
+            "checkpoint_rule": "lowest validation EF MAE",
+            "spatial_augmentation": "none",
+            "git_commit": git_commit(),
+            "command": " ".join(sys.argv),
+            "environment": device_metadata(),
         }
     )
+    with (output / "run_config.json").open("w") as f:
+        json.dump(config, f, indent=2)
 
-    return row
-
-
-def classification_history_row(
-    epoch: int,
-    phase: str,
-    result: Mapping[str, Any],
-) -> Dict[str, Any]:
-    metrics = result["classification"]
-
-    row = _base_history_row(
-        epoch=epoch,
-        phase=phase,
-        frame_type="ef_classification",
-        result=result,
+    train_ds = EchoMultitaskDataset(str(data_root), "train")
+    val_ds = EchoMultitaskDataset(str(data_root), "val")
+    train_loader = make_loader(
+        train_ds, args.batch_size, args.num_workers, True, args.seed, device
     )
-
-    row.update(
-        {
-            "dice": "",
-            "iou": "",
-            "accuracy": metrics["accuracy"],
-            "precision": metrics["precision"],
-            "recall": metrics["recall"],
-            "f1": metrics["f1"],
-            "specificity": metrics["specificity"],
-            "roc_auc": metrics["roc_auc"],
-            "tn": metrics["tn"],
-            "fp": metrics["fp"],
-            "fn": metrics["fn"],
-            "tp": metrics["tp"],
-        }
+    val_loader = make_loader(
+        val_ds, args.batch_size, args.num_workers, False, args.seed, device
     )
-
-    return row
-
-
-def result_rows(
-    epoch: int,
-    phase: str,
-    result: Mapping[str, Any],
-) -> list[Dict[str, Any]]:
-    return [
-        segmentation_history_row(
-            epoch=epoch,
-            phase=phase,
-            frame_type="overall",
-            result=result,
-        ),
-        segmentation_history_row(
-            epoch=epoch,
-            phase=phase,
-            frame_type="large",
-            result=result,
-        ),
-        segmentation_history_row(
-            epoch=epoch,
-            phase=phase,
-            frame_type="small",
-            result=result,
-        ),
-        classification_history_row(
-            epoch=epoch,
-            phase=phase,
-            result=result,
-        ),
-    ]
-
-
-def initialize_history_file(path: Path) -> None:
-    path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    with path.open("w", newline="") as csv_file:
-        writer = csv.DictWriter(
-            csv_file,
-            fieldnames=HISTORY_COLUMNS,
-        )
-        writer.writeheader()
-
-
-def append_result_rows(
-    path: Path,
-    epoch: int,
-    phase: str,
-    result: Mapping[str, Any],
-) -> None:
-    with path.open("a", newline="") as csv_file:
-        writer = csv.DictWriter(
-            csv_file,
-            fieldnames=HISTORY_COLUMNS,
-        )
-        writer.writerows(
-            result_rows(
-                epoch=epoch,
-                phase=phase,
-                result=result,
-            )
-        )
-
-
-def write_validation_metrics(
-    path: Path,
-    epoch: int,
-    result: Mapping[str, Any],
-) -> None:
-    with path.open("w", newline="") as csv_file:
-        writer = csv.DictWriter(
-            csv_file,
-            fieldnames=HISTORY_COLUMNS,
-        )
-        writer.writeheader()
-        writer.writerows(
-            result_rows(
-                epoch=epoch,
-                phase="val",
-                result=result,
-            )
-        )
-
-
-def validate_dataset_files(data_root: Path) -> None:
-    if not data_root.exists():
-        raise FileNotFoundError(
-            f"Dataset directory was not found: {data_root}"
-        )
-
-    required_paths = [
-        FILE_LIST_PATH,
-        VOLUME_TRACINGS_PATH,
-        VIDEOS_DIR,
-    ]
-
-    for required_path in required_paths:
-        if not required_path.exists():
-            raise FileNotFoundError(
-                "Required EchoNet dataset item was not found: "
-                f"{required_path}"
-            )
-
-
-def validate_sample_batch(
-    sample_batch: Mapping[str, torch.Tensor],
-) -> None:
-    expected_shapes = {
-        "large_image": (4, 3),
-        "small_image": (4, 3),
-        "large_mask": (4, 1),
-        "small_mask": (4, 1),
-    }
-
-    for key, (expected_ndim, expected_channels) in expected_shapes.items():
-        tensor = sample_batch[key]
-
-        if tensor.ndim != expected_ndim:
-            raise ValueError(
-                f"{key} must have {expected_ndim} dimensions, "
-                f"but received shape {tuple(tensor.shape)}."
-            )
-
-        if tensor.shape[1] != expected_channels:
-            raise ValueError(
-                f"{key} must have {expected_channels} channel(s), "
-                f"but received shape {tuple(tensor.shape)}."
-            )
-
-    if sample_batch["label"].ndim != 1:
-        raise ValueError(
-            "Labels must have batch shape [B], "
-            f"but received {tuple(sample_batch['label'].shape)}."
-        )
-
-
-def print_epoch_summary(
-    epoch: int,
-    train_result: Mapping[str, Any],
-    val_result: Mapping[str, Any],
-) -> None:
-    train_overall = train_result["overall"]
-    val_overall = val_result["overall"]
-    val_classification = val_result["classification"]
-
-    print(f"\nEpoch {epoch}/{EPOCHS}")
-
-    print(
-        "Train segmentation: "
-        f"loss={train_result['losses']['total_loss']:.6f}, "
-        f"dice={train_overall['dice']:.6f}, "
-        f"iou={train_overall['iou']:.6f}"
-    )
-
-    print(
-        "Validation segmentation: "
-        f"loss={val_result['losses']['total_loss']:.6f}, "
-        f"dice={val_overall['dice']:.6f}, "
-        f"iou={val_overall['iou']:.6f}, "
-        f"precision={val_overall['precision']:.6f}, "
-        f"recall={val_overall['recall']:.6f}, "
-        f"specificity={val_overall['specificity']:.6f}, "
-        f"roc_auc={val_overall['roc_auc']:.6f}"
-    )
-
-    print(
-        "Validation EF classification: "
-        f"accuracy={val_classification['accuracy']:.6f}, "
-        f"precision={val_classification['precision']:.6f}, "
-        f"recall={val_classification['recall']:.6f}, "
-        f"f1={val_classification['f1']:.6f}, "
-        f"specificity={val_classification['specificity']:.6f}, "
-        f"roc_auc={val_classification['roc_auc']:.6f}"
-    )
-
-
-def main() -> None:
-    device = torch.device(
-        "cuda" if torch.cuda.is_available() else "cpu"
-    )
-
-    print(f"Using device: {device}")
-
-    data_root = Path(DATA_DIR)
-    validate_dataset_files(data_root)
-
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    initialize_history_file(HISTORY_PATH)
 
     model = MultitaskDeepLabV3(
-        num_classes=NUM_CLASSES,
-        pretrained=True,
+        pretrained=not args.no_pretrained,
+        regression_hidden_dim=args.regression_hidden_dim,
+        dropout=args.dropout,
     ).to(device)
-
-    criterion = MultitaskLoss(
-        segmentation_loss="bce_dice",
-        seg_weight=1.0,
-        class_weight=0.3,
-    )
-
+    criterion = MultitaskLoss(args.ef_weight, args.seg_weight)
     optimizer = Adam(
-        model.parameters(),
-        lr=LEARNING_RATE,
+        model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
     )
 
-    train_dataset = EchoMultitaskDataset(
-        root=str(data_root),
-        split="train",
-        ef_threshold=EF_THRESHOLD,
-    )
+    history: List[dict] = []
+    best_mae = float("inf")
+    best_epoch = None
 
-    val_dataset = EchoMultitaskDataset(
-        root=str(data_root),
-        split="val",
-        ef_threshold=EF_THRESHOLD,
-    )
-
-    print(f"Training patients:   {len(train_dataset):,}")
-    print(f"Validation patients: {len(val_dataset):,}")
-
-    pin_memory = device.type == "cuda"
-    persistent_workers = NUM_WORKERS > 0
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=NUM_WORKERS,
-        pin_memory=pin_memory,
-        persistent_workers=persistent_workers,
-    )
-
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        num_workers=NUM_WORKERS,
-        pin_memory=pin_memory,
-        persistent_workers=persistent_workers,
-    )
-
-    sample_batch = next(iter(train_loader))
-
-    print(
-        "Large image batch:",
-        tuple(sample_batch["large_image"].shape),
-    )
-    print(
-        "Small image batch:",
-        tuple(sample_batch["small_image"].shape),
-    )
-    print(
-        "Large mask batch:",
-        tuple(sample_batch["large_mask"].shape),
-    )
-    print(
-        "Small mask batch:",
-        tuple(sample_batch["small_mask"].shape),
-    )
-    print(
-        "Label batch:",
-        tuple(sample_batch["label"].shape),
-    )
-    print(
-        "Example EF values:",
-        sample_batch["ef"][:4],
-    )
-
-    validate_sample_batch(sample_batch)
-
-    best_dice = -float("inf")
-    best_epoch: Optional[int] = None
-
-    for epoch in range(1, EPOCHS + 1):
-        train_result = run_multitask_epoch(
-            model=model,
-            dataloader=train_loader,
-            criterion=criterion,
-            device=device,
-            optimizer=optimizer,
+    for epoch in range(1, args.epochs + 1):
+        train_metrics, _ = run_epoch(
+            model, train_loader, criterion, device, optimizer, compute_hd95=False
+        )
+        val_metrics, val_predictions = run_epoch(
+            model, val_loader, criterion, device, None, compute_hd95=True
         )
 
-        val_result = run_multitask_epoch(
-            model=model,
-            dataloader=val_loader,
-            criterion=criterion,
-            device=device,
-            optimizer=None,
-        )
-
-        append_result_rows(
-            path=HISTORY_PATH,
-            epoch=epoch,
-            phase="train",
-            result=train_result,
-        )
-
-        append_result_rows(
-            path=HISTORY_PATH,
-            epoch=epoch,
-            phase="val",
-            result=val_result,
-        )
-
-        print_epoch_summary(
-            epoch=epoch,
-            train_result=train_result,
-            val_result=val_result,
-        )
-
-        current_validation_dice = val_result["overall"]["dice"]
+        for phase, metrics in [("train", train_metrics), ("val", val_metrics)]:
+            row = {"epoch": epoch, "phase": phase, "seed": args.seed}
+            row.update(metrics)
+            history.append(row)
+        write_csv(output / "training_history.csv", history)
 
         checkpoint = {
             "epoch": epoch,
-            "model_name": MODEL_NAME,
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
-            "best_dice": best_dice,
-            "validation_metrics": val_result,
-            "ef_threshold": EF_THRESHOLD,
-            "segmentation_threshold": SEGMENTATION_THRESHOLD,
-            "num_classes": NUM_CLASSES,
+            "val_metrics": val_metrics,
+            "config": config,
         }
+        torch.save(checkpoint, output / "checkpoint.pt")
 
-        torch.save(
-            checkpoint,
-            CHECKPOINT_PATH,
+        if val_metrics["mae"] < best_mae:
+            best_mae = val_metrics["mae"]
+            best_epoch = epoch
+            torch.save(checkpoint, output / "best.pt")
+            write_csv(output / "best_validation_predictions.csv", val_predictions)
+            with (output / "best_validation_metrics.json").open("w") as f:
+                json.dump(val_metrics, f, indent=2)
+
+        print(
+            f"Epoch {epoch:03d} | "
+            f"train total={train_metrics['total_loss']:.4f} | "
+            f"val MAE={val_metrics['mae']:.3f} RMSE={val_metrics['rmse']:.3f} "
+            f"R2={val_metrics['r2']:.3f} r={val_metrics['pearson_r']:.3f} | "
+            f"Dice={val_metrics['mean_dice']:.4f} HD95={val_metrics['mean_hd95']:.3f}"
         )
 
-        if current_validation_dice > best_dice:
-            best_dice = current_validation_dice
-            best_epoch = epoch
-
-            checkpoint["best_dice"] = best_dice
-
-            torch.save(
-                checkpoint,
-                BEST_CHECKPOINT_PATH,
-            )
-
-            write_validation_metrics(
-                path=VALIDATION_METRICS_PATH,
-                epoch=epoch,
-                result=val_result,
-            )
-
-            print(
-                "Saved new best checkpoint: "
-                f"epoch={epoch}, "
-                f"validation Dice={best_dice:.6f}"
-            )
-
-    print("\nTraining complete.")
-    print(f"Best epoch: {best_epoch}")
-    print(f"Best validation Dice: {best_dice:.6f}")
-    print(f"Latest checkpoint: {CHECKPOINT_PATH}")
-    print(f"Best checkpoint: {BEST_CHECKPOINT_PATH}")
-    print(f"Training history: {HISTORY_PATH}")
-    print(f"Best validation metrics: {VALIDATION_METRICS_PATH}")
+    summary = {
+        "best_epoch": best_epoch,
+        "best_validation_mae": best_mae,
+        "best_checkpoint": str(output / "best.pt"),
+    }
+    with (output / "run_summary.json").open("w") as f:
+        json.dump(summary, f, indent=2)
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
