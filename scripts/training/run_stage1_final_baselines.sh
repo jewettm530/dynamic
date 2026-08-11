@@ -8,7 +8,7 @@ if [[ -z "${PROJECT_ROOT}" ]]; then
 fi
 cd "${PROJECT_ROOT}"
 export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES="${STEP3_GPU:-0}"
 
 EF_CONFIG="${PROJECT_ROOT}/configs/ef_only.yaml"
 SEG_CONFIG="${PROJECT_ROOT}/configs/segmentation_only.yaml"
