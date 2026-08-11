@@ -1,0 +1,69 @@
+# EchoNet-Dynamic Stage 1 multi-task loss-weighting configuration
+# All settings below MUST remain identical across W1/W2/W3 except ef_weight and seg_weight.
+
+experiment:
+  stage: 1
+  task: multitask
+  purpose: loss_weight_selection
+
+data:
+  root: /data/jewettm/dynamic/datasets
+  train_split: train
+  validation_split: val
+  test_split_used: false
+
+model:
+  architecture: MultitaskDeepLabV3
+  pretrained: true
+  regression_hidden_dim: 256
+  dropout: 0.3
+
+training:
+  epochs: 25
+  batch_size: 4
+  num_workers: 4
+  optimizer: Adam
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  deterministic: true
+  seeds:
+    - 42
+    - 2026
+    - 3407
+
+ef:
+  task_type: continuous_regression
+  training_target_scale: 0-1
+  evaluation_scale: 0-100
+  percent_conversion: prediction_times_100
+  loss: MSELoss_mean
+  checkpoint_metric: validation_MAE
+  checkpoint_mode: min
+
+segmentation:
+  structure: left_ventricular_cavity
+  labeled_frames:
+    - ED
+    - ES
+  mask_type: binary
+  loss: BCEWithLogitsLoss_mean
+  threshold: 0.5
+  metrics:
+    - Dice_ED
+    - Dice_ES
+    - Mean_Dice
+    - HD95_pixels
+
+selection:
+  checkpoint_rule: lowest_validation_EF_MAE
+  same_checkpoint_for_both_tasks: true
+  weight_selection_split: validation
+  test_results_for_weight_selection: false
+
+output:
+  root: output/stage1/weighting
+
+weighting:
+  name: W3
+  ef_weight: 0.9
+  seg_weight: 0.1
