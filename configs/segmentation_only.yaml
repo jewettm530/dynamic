@@ -1,0 +1,39 @@
+# EchoNet-Dynamic Stage 1 final segmentation-only baseline
+experiment:
+  stage: 1
+  task: segmentation_only
+  purpose: final_baseline
+
+data:
+  root: /data/jewettm/dynamic/datasets
+  cohort: common_ed_es_traced_videos
+  expected_train_videos: 7460
+  expected_validation_videos: 1288
+  expected_test_videos: 1276
+
+model:
+  architecture: deeplabv3_resnet50
+  pretrained: true
+  output_channels: 1
+
+training:
+  epochs: 50
+  batch_size: 20
+  num_workers: 4
+  optimizer: SGD
+  learning_rate: 0.00001
+  momentum: 0.9
+  weight_decay: 0.00001
+  deterministic: true
+  seeds: [42, 2026, 3407]
+
+segmentation:
+  structure: left_ventricular_cavity
+  labeled_frames: [ED, ES]
+  mask_type: binary
+  loss: BCEWithLogitsLoss_mean
+  threshold: 0.5
+  checkpoint_rule: highest_validation_Mean_Dice
+
+output:
+  root: output/stage1/final_baselines/segmentation_only

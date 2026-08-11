@@ -1,16 +1,17 @@
-# EchoNet-Dynamic Stage 1 multi-task loss-weighting configuration
-# All settings below MUST remain identical across W1/W2/W3 except ef_weight and seg_weight.
-
+# EchoNet-Dynamic Stage 1 selected final multi-task baseline
+# LOCKED after Step 2 using validation results only.
 experiment:
   stage: 1
   task: multitask
-  purpose: loss_weight_selection
+  purpose: final_baseline
+  reuse_step2_runs: true
 
 data:
   root: /data/jewettm/dynamic/datasets
-  train_split: train
-  validation_split: val
-  test_split_used: false
+  cohort: common_ed_es_traced_videos
+  expected_train_videos: 7460
+  expected_validation_videos: 1288
+  expected_test_videos: 1276
 
 model:
   architecture: MultitaskDeepLabV3
@@ -26,44 +27,27 @@ training:
   learning_rate: 0.0001
   weight_decay: 0.0
   deterministic: true
-  seeds:
-    - 42
-    - 2026
-    - 3407
+  seeds: [42, 2026, 3407]
 
 ef:
-  task_type: continuous_regression
   training_target_scale: 0-1
   evaluation_scale: 0-100
-  percent_conversion: prediction_times_100
   loss: MSELoss_mean
-  checkpoint_metric: validation_MAE
-  checkpoint_mode: min
 
 segmentation:
-  structure: left_ventricular_cavity
-  labeled_frames:
-    - ED
-    - ES
-  mask_type: binary
   loss: BCEWithLogitsLoss_mean
   threshold: 0.5
-  metrics:
-    - Dice_ED
-    - Dice_ES
-    - Mean_Dice
-    - HD95_pixels
-
-selection:
-  checkpoint_rule: lowest_validation_EF_MAE
-  same_checkpoint_for_both_tasks: true
-  weight_selection_split: validation
-  test_results_for_weight_selection: false
-
-output:
-  root: output/stage1/weighting
 
 weighting:
   name: W2
   ef_weight: 0.5
   seg_weight: 0.5
+  selection_basis: lowest_mean_validation_EF_MAE
+
+checkpoint:
+  rule: lowest_validation_EF_MAE
+  same_checkpoint_for_both_tasks: true
+
+reuse:
+  source_root: output/stage1/weighting/W2
+  note: Reuse is valid only because no training-relevant code, split, hyperparameter, epoch budget, or checkpoint rule changed after Step 2.

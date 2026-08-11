@@ -1,0 +1,40 @@
+# EchoNet-Dynamic Stage 1 final EF-only baseline
+experiment:
+  stage: 1
+  task: ef_only
+  purpose: final_baseline
+
+data:
+  root: /data/jewettm/dynamic/datasets
+  cohort: common_ed_es_traced_videos
+  expected_train_videos: 7460
+  expected_validation_videos: 1288
+  expected_test_videos: 1276
+
+model:
+  architecture: r2plus1d_18
+  pretrained: true
+
+training:
+  epochs: 45
+  frames: 32
+  period: 2
+  batch_size: 20
+  num_workers: 5
+  optimizer: SGD
+  learning_rate: 0.0001
+  momentum: 0.9
+  weight_decay: 0.0001
+  lr_step_period: 15
+  deterministic: true
+  seeds: [42, 2026, 3407]
+
+ef:
+  task_type: continuous_regression
+  training_target_scale: 0-1
+  evaluation_scale: 0-100
+  loss: MSELoss_mean
+  checkpoint_rule: lowest_validation_MAE
+
+output:
+  root: output/stage1/final_baselines/ef_only
