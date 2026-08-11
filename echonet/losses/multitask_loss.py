@@ -1,7 +1,8 @@
 """Stage 1 multi-task loss.
 
-Stage 1 fixes the EF target scale to native EF percentage points (0-100) and
-uses MSE for EF regression. The segmentation baseline uses BCEWithLogitsLoss;
+Stage 1 fixes the EF training target scale to fractions (0-1) and uses MSE for
+EF regression. Evaluation converts predictions and targets to percentage
+points (0-100). The segmentation baseline uses BCEWithLogitsLoss;
 therefore the naive MTL baseline uses the same segmentation loss.
 """
 

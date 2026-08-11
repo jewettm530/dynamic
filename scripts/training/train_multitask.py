@@ -3,7 +3,7 @@
 
 Tasks
 -----
-* EF: continuous regression on the native 0-100 percentage scale.
+* EF: continuous regression trained on a 0-1 scale and reported on 0-100.
 * LV segmentation: binary masks on labeled ED (Large) and ES (Small) frames.
 
 Checkpoint rule
@@ -36,6 +36,7 @@ from echonet.modeling.multitask_deeplab import MultitaskDeepLabV3
 from echonet.utils.reproducibility import make_generator, seed_everything, seed_worker
 from echonet.utils.stage1_metrics import (
     dice_score,
+    ef_fraction_to_percent,
     hd95_pixels,
     regression_metrics,
     summarize_segmentation,
@@ -84,7 +85,7 @@ class EchoMultitaskDataset(Dataset):
             "es_image": es_frame,
             "ed_mask": (ed_mask > 0.5).float(),
             "es_mask": (es_mask > 0.5).float(),
-            "ef": torch.tensor(float(ef), dtype=torch.float32),
+            "ef": torch.tensor(float(ef) / 100.0, dtype=torch.float32),
         }
 
 
@@ -230,8 +231,12 @@ def run_epoch(
                 if compute_hd95:
                     es_hd95.append(hd95_pixels(pred, true))
 
-            ef_targets.extend(ef.detach().cpu().numpy().reshape(-1).tolist())
-            ef_predictions.extend(video_ef.detach().cpu().numpy().reshape(-1).tolist())
+            ef_targets.extend(
+                ef_fraction_to_percent(ef.detach().cpu().numpy()).reshape(-1).tolist()
+            )
+            ef_predictions.extend(
+                ef_fraction_to_percent(video_ef.detach().cpu().numpy()).reshape(-1).tolist()
+            )
             filenames.extend(list(batch["filename"]))
 
     reg = regression_metrics(ef_targets, ef_predictions)
@@ -260,7 +265,11 @@ def run_epoch(
     )
 
     predictions = [
-        {"filename": f, "ef_target": y, "ef_prediction": yhat}
+        {
+            "filename": f,
+            "ef_target_percent": y,
+            "ef_prediction_percent": yhat,
+        }
         for f, y, yhat in zip(filenames, ef_targets, ef_predictions)
     ]
     return metrics, predictions
@@ -294,7 +303,9 @@ def main():
     config.update(
         {
             "task": "multitask",
-            "ef_target_scale": "0-100 percentage points",
+            "ef_training_target_scale": "0-1 fraction",
+            "ef_evaluation_scale": "0-100 percentage points",
+            "ef_percent_conversion": "prediction * 100",
             "ef_loss": "MSELoss(mean)",
             "segmentation_loss": "BCEWithLogitsLoss(mean)",
             "checkpoint_rule": "lowest validation EF MAE",

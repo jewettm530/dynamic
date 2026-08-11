@@ -25,7 +25,7 @@ from torch.utils.data import DataLoader
 
 from echonet.datasets.echo import Echo
 from echonet.utils.reproducibility import make_generator, seed_everything, seed_worker
-from echonet.utils.stage1_metrics import regression_metrics
+from echonet.utils.stage1_metrics import ef_fraction_to_percent, regression_metrics
 
 
 def parse_args():
@@ -95,7 +95,7 @@ def run_epoch(model, loader, device, optimizer: Optional[torch.optim.Optimizer])
     with torch.set_grad_enabled(training):
         for x, y in loader:
             x = x.to(device, dtype=torch.float32, non_blocking=True)
-            y = y.to(device, dtype=torch.float32, non_blocking=True).reshape(-1)
+            y = y.to(device, dtype=torch.float32, non_blocking=True).reshape(-1) / 100.0
             if training:
                 optimizer.zero_grad(set_to_none=True)
             pred = model(x).reshape(-1)
@@ -106,8 +106,8 @@ def run_epoch(model, loader, device, optimizer: Optional[torch.optim.Optimizer])
             b = y.shape[0]
             total_loss += float(loss.detach().cpu().item()) * b
             n += b
-            ys.extend(y.detach().cpu().numpy().tolist())
-            yhats.extend(pred.detach().cpu().numpy().tolist())
+            ys.extend(ef_fraction_to_percent(y.detach().cpu().numpy()).tolist())
+            yhats.extend(ef_fraction_to_percent(pred.detach().cpu().numpy()).tolist())
 
     metrics = regression_metrics(ys, yhats)
     metrics["raw_ef_loss"] = total_loss / max(n, 1)
@@ -156,7 +156,9 @@ def main():
     config = vars(args).copy()
     config.update({
         "task": "EF-only continuous regression",
-        "ef_target_scale": "0-100 percentage points",
+        "ef_training_target_scale": "0-1 fraction",
+        "ef_evaluation_scale": "0-100 percentage points",
+        "ef_percent_conversion": "prediction * 100",
         "ef_loss": "MSELoss(mean)",
         "checkpoint_rule": "lowest validation EF MAE",
         "spatial_augmentation": "none",

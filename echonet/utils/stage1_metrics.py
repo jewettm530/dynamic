@@ -11,6 +11,12 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
 EPS = 1e-8
+EF_PERCENT_SCALE = 100.0
+
+
+def ef_fraction_to_percent(values):
+    """Convert model-scale EF fractions to percentage points for reporting."""
+    return np.asarray(values) * EF_PERCENT_SCALE
 
 
 def regression_metrics(targets, predictions) -> Dict[str, float]:

@@ -44,7 +44,13 @@ class EchoMultitaskDataset(Dataset):
         es = torch.as_tensor(es, dtype=torch.float32)
         ed_mask = (torch.as_tensor(ed_mask, dtype=torch.float32).unsqueeze(0) > 0.5).float()
         es_mask = (torch.as_tensor(es_mask, dtype=torch.float32).unsqueeze(0) > 0.5).float()
-        return {"ed_image": ed, "es_image": es, "ed_mask": ed_mask, "es_mask": es_mask, "ef": torch.tensor(float(ef), dtype=torch.float32)}
+        return {
+            "ed_image": ed,
+            "es_image": es,
+            "ed_mask": ed_mask,
+            "es_mask": es_mask,
+            "ef": torch.tensor(float(ef) / 100.0, dtype=torch.float32),
+        }
 
 
 def parse_args():
@@ -140,7 +146,9 @@ def main():
             "min": float(values.min()),
             "max": float(values.max()),
         }
-    summary["ef_target_scale"] = "0-100 percentage points"
+    summary["ef_training_target_scale"] = "0-1 fraction"
+    summary["ef_evaluation_scale"] = "0-100 percentage points"
+    summary["ef_percent_conversion"] = "prediction * 100"
     summary["ef_loss"] = "MSELoss(mean)"
     summary["segmentation_loss"] = "BCEWithLogitsLoss(mean)"
 

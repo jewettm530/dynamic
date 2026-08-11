@@ -134,7 +134,7 @@ python scripts/verification/loss_scale_check.py \
     --seed 42 \
     --ef-weight 0.5 \
     --seg-weight 0.5 \
-    --batches "${AUDIT_LOSS_BATCHES:-10}" \
+    --batches "${AUDIT_LOSS_BATCHES:-100}" \
     --num-workers "${AUDIT_NUM_WORKERS:-0}" \
     --no-pretrained
 

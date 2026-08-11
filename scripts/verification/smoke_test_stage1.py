@@ -14,7 +14,11 @@ from echonet.datasets.echo import Echo
 from echonet.losses.multitask_loss import MultitaskLoss
 from echonet.modeling.multitask_deeplab import MultitaskDeepLabV3
 from echonet.utils.reproducibility import make_generator, seed_everything, seed_worker
-from echonet.utils.stage1_metrics import dice_score, regression_metrics
+from echonet.utils.stage1_metrics import (
+    dice_score,
+    ef_fraction_to_percent,
+    regression_metrics,
+)
 
 
 class SmokeDataset(Dataset):
@@ -34,7 +38,7 @@ class SmokeDataset(Dataset):
             "es": torch.as_tensor(es, dtype=torch.float32),
             "edm": (torch.as_tensor(edm, dtype=torch.float32).unsqueeze(0) > 0.5).float(),
             "esm": (torch.as_tensor(esm, dtype=torch.float32).unsqueeze(0) > 0.5).float(),
-            "ef": torch.tensor(float(ef), dtype=torch.float32),
+            "ef": torch.tensor(float(ef) / 100.0, dtype=torch.float32),
         }
 
 
@@ -78,7 +82,9 @@ def main():
     probs = torch.sigmoid(out["segmentation"]).detach().cpu().numpy()[:, 0]
     truth = masks.detach().cpu().numpy()[:, 0]
     dice = [dice_score(p >= 0.5, t >= 0.5) for p, t in zip(probs, truth)]
-    reg = regression_metrics(ef.detach().cpu().numpy(), video_ef.detach().cpu().numpy())
+    ef_percent = ef_fraction_to_percent(ef.detach().cpu().numpy())
+    prediction_percent = ef_fraction_to_percent(video_ef.detach().cpu().numpy())
+    reg = regression_metrics(ef_percent, prediction_percent)
 
     result = {
         "device": str(device),
@@ -86,8 +92,12 @@ def main():
         "segmentation_output_shape": list(out["segmentation"].shape),
         "frame_ef_output_shape": list(out["ef"].shape),
         "video_ef_output_shape": list(video_ef.shape),
-        "ef_targets": ef.detach().cpu().numpy().tolist(),
-        "ef_predictions": video_ef.detach().cpu().numpy().tolist(),
+        "ef_training_target_scale": "0-1 fraction",
+        "ef_evaluation_scale": "0-100 percentage points",
+        "ef_targets_fraction": ef.detach().cpu().numpy().tolist(),
+        "ef_predictions_fraction": video_ef.detach().cpu().numpy().tolist(),
+        "ef_targets_percent": ef_percent.tolist(),
+        "ef_predictions_percent": prediction_percent.tolist(),
         "loss_components": components,
         "regression_metrics": reg,
         "mean_batch_dice": float(sum(dice) / len(dice)),
