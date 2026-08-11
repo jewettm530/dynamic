@@ -1,0 +1,22 @@
+{
+  "complete": true,
+  "recommended_weight": "W2",
+  "locked_weight": null,
+  "manual_segmentation_review_required": true,
+  "segmentation_failure_threshold": null,
+  "rejections": {},
+  "selection_rule": [
+    "lowest mean validation EF MAE",
+    "lower mean validation RMSE if MAE is tied",
+    "higher mean validation Mean Dice if RMSE is tied",
+    "reject a setting if segmentation clearly fails"
+  ],
+  "reason": "lowest mean validation EF MAE. Numeric recommendation only; manually verify that segmentation did not clearly fail before recording this as the locked weight.",
+  "winner_metrics": {
+    "mean_val_mae": 5.406351178822803,
+    "mean_val_rmse": 7.498248047825093,
+    "mean_val_r2": 0.6285085765191224,
+    "mean_val_mean_dice": 0.9193251258703189,
+    "mean_val_mean_hd95": 2.8967487951100956
+  }
+}

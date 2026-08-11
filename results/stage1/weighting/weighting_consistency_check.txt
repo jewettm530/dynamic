@@ -1,0 +1,3 @@
+Multiple Git commits were recorded across completed runs: af847718cca8e67034e6ac5f5f0bf9f0d4fa04c5, 5497ebbd50b61959750f3309abeec2c5b6ce76b2. These commits must be compared to verify that no training-relevant code or configuration changed.
+Checkpoint rule consistent: lowest validation EF MAE
+Fixed architecture/training settings are consistent across completed runs; only seed and EF/segmentation loss weights vary.

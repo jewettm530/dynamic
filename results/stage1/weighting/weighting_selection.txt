@@ -1,0 +1,33 @@
+EchoNet-Dynamic Stage 1 Step 2 Weight Selection
+====================================================
+
+Selection rule:
+  1. Lowest mean validation EF MAE
+  2. Lower mean validation RMSE if tied
+  3. Higher mean validation Mean Dice if still tied
+  4. Reject a setting if segmentation clearly fails
+
+W1:
+  Val MAE       = 5.7414 +/- 0.1630
+  Val RMSE      = 7.8803 +/- 0.2640
+  Val R2        = 0.5896 +/- 0.0273
+  Val Mean Dice = 0.9183 +/- 0.0027
+  Val Mean HD95 = 2.9370 +/- 0.0474
+
+W2:
+  Val MAE       = 5.4064 +/- 0.0403
+  Val RMSE      = 7.4982 +/- 0.1953
+  Val R2        = 0.6285 +/- 0.0194
+  Val Mean Dice = 0.9193 +/- 0.0019
+  Val Mean HD95 = 2.8967 +/- 0.0725
+
+W3:
+  Val MAE       = 5.5230 +/- 0.1181
+  Val RMSE      = 7.4927 +/- 0.1688
+  Val R2        = 0.6291 +/- 0.0168
+  Val Mean Dice = 0.9164 +/- 0.0010
+  Val Mean HD95 = 3.0049 +/- 0.0827
+
+Numeric recommendation: W2
+Reason: lowest mean validation EF MAE. Numeric recommendation only; manually verify that segmentation did not clearly fail before recording this as the locked weight.
+Locked multi-task weight: NOT YET LOCKED — manually confirm that segmentation did not clearly fail.

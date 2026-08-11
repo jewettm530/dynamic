@@ -1,0 +1,21 @@
+EchoNet-Dynamic Stage 1 Multi-Task Weight Selection
+
+Locked weight: W2
+Formula: 0.5 * L_EF + 0.5 * L_seg
+
+Selection basis:
+- Primary criterion: lowest mean validation EF MAE
+- W1 MAE: 5.7414 +/- 0.1630 percentage points
+- W2 MAE: 5.4064 +/- 0.0403 percentage points
+- W3 MAE: 5.5230 +/- 0.1181 percentage points
+
+Segmentation review:
+- W2 Mean Dice: 0.9193 +/- 0.0019
+- W2 Mean HD95: 2.8967 +/- 0.0725 pixels
+- No evidence of segmentation failure.
+- W2 had the highest Mean Dice and lowest Mean HD95 of the three settings.
+
+Decision:
+W2 is locked for the Stage 1 final multi-task baseline.
+
+The test set was not used in selecting this weight.

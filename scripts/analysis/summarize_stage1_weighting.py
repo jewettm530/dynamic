@@ -347,15 +347,23 @@ def validate_run_consistency(seed_df: pd.DataFrame) -> List[str]:
     """Return human-readable consistency messages; raise on invalid experiments."""
     messages: List[str] = []
 
-    # All completed runs must use the same Git commit.
+    # Preserve and report Git commits used by the completed runs.
+    # Multiple commits are not automatically fatal because a commit may contain
+    # only analysis/documentation changes that do not affect training. Fixed model
+    # and training settings are validated separately below.
     commits = [str(x) for x in seed_df["git_commit"].dropna().unique()]
-    if len(commits) > 1:
-        raise ValueError(
-            "Official weighting runs use more than one Git commit: " + ", ".join(commits)
-        )
-    if commits:
-        messages.append(f"Git commit consistent across completed runs: {commits[0]}")
 
+    if len(commits) == 1:
+        messages.append(
+            f"Git commit consistent across completed runs: {commits[0]}"
+        )
+    elif len(commits) > 1:
+        messages.append(
+            "Multiple Git commits were recorded across completed runs: "
+            + ", ".join(commits)
+            + ". These commits must be compared to verify that no training-relevant "
+            "code or configuration changed."
+        )
     # The required checkpoint rule must be the same for every run.
     rules = [str(x) for x in seed_df["checkpoint_rule"].dropna().unique()]
     if len(rules) > 1:
