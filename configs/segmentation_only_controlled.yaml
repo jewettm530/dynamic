@@ -1,0 +1,39 @@
+experiment:
+  stage: 1
+  step: 3
+  task: segmentation_only
+  design: controlled_ablation
+  reference: W2
+data:
+  root: /data/jewettm/dynamic/datasets
+  cohort: common_ed_es_traced_videos
+  input: paired_labeled_ED_ES_frames
+  train_videos: 7460
+  validation_videos: 1288
+  test_videos: 1276
+  spatial_augmentation: none
+model:
+  architecture_family: MultitaskDeepLabV3
+  ablation: ef_branch_removed
+  backbone: DeepLabV3_ResNet50
+  pretrained: true
+  regression_hidden_dim: 256
+  dropout: 0.3
+training:
+  epochs: 25
+  batch_size: 4
+  num_workers: 4
+  optimizer: Adam
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  deterministic: true
+  seeds: [42, 2026, 3407]
+task:
+  structure: left_ventricular_cavity
+  labeled_frames: [ED, ES]
+  mask_type: binary
+  loss: BCEWithLogitsLoss_mean
+  threshold: 0.5
+  checkpoint_rule: highest_validation_Mean_Dice
+output:
+  root: output/stage1/final_baselines_controlled/segmentation_only
