@@ -94,7 +94,11 @@ def build_seg():
 
 
 def load_state(model,path,device):
-    ckpt=torch.load(path,map_location=device)
+    ckpt = torch.load(
+        path,
+        map_location=device,
+        weights_only=False,
+    )
     model.load_state_dict(ckpt['model_state_dict'])
     return ckpt
 
@@ -194,7 +198,11 @@ def main():
             seed_everything(EVAL_SEED,deterministic=True)
             mtl_dl=loader(mtl_ds,args.batch_size_mtl,args.num_workers,device)
             ckpath=Path(args.mtl_root)/f'seed_{seed}'/'best.pt'
-            ck=torch.load(ckpath,map_location=device)
+            ck = torch.load(
+                ckpath,
+                map_location=device,
+                weights_only=False,
+            )
             cfg=ck.get('config',{})
             model=MultitaskDeepLabV3(pretrained=False,
                 regression_hidden_dim=int(cfg.get('regression_hidden_dim',256)),
