@@ -1,0 +1,5 @@
+Model,Weight,Split,Dice ED,Dice ES,Mean Dice,Mean HD95
+Segmentation only,N/A,Validation,0.934 +/- 0.001,0.908 +/- 0.001,0.921 +/- 0.001,2.808 +/- 0.043
+Segmentation only,N/A,Test,0.933 +/- 0.000,0.908 +/- 0.000,0.921 +/- 0.000,2.780 +/- 0.029
+Multi-task,W2,Validation,0.932 +/- 0.002,0.907 +/- 0.002,0.919 +/- 0.002,2.897 +/- 0.073
+Multi-task,W2,Test,0.931 +/- 0.001,0.907 +/- 0.002,0.919 +/- 0.001,2.830 +/- 0.037
