@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# HISTORICAL T0 ONLY: two-frame ED/ES oracle diagnostic. Use train_stage1_b3_video_multitask.py for corrected Stage 1.
 """Train the Stage 1 naive multi-task EchoNet-Dynamic baseline.
 
 Tasks

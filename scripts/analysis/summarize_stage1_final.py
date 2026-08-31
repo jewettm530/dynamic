@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SUPERSEDED PRE-CORRECTION SUMMARY: use summarize_stage1_corrected_final.py.
 """Summarize Stage 1 final validation/test results as mean +/- sample SD."""
 from __future__ import annotations
 import argparse,json
@@ -24,8 +25,8 @@ def fmt(m,s,n=3): return f'{m:.{n}f} +/- {s:.{n}f}'
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument('--input-root',default='output/stage1/final_evaluation')
-    ap.add_argument('--output-dir',default='results/stage1/final')
+    ap.add_argument('--input-root',default='output/stage1/archive_pre_correction/final_evaluation')
+    ap.add_argument('--output-dir',default='results/stage1/archive_pre_correction/unmatched_comparison')
     args=ap.parse_args(); root=Path(args.input_root); out=Path(args.output_dir); out.mkdir(parents=True,exist_ok=True)
     rows=[]
     for key,(label,weight) in MODELS.items():

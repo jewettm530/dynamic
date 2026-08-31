@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# HISTORICAL T0 ONLY. Use run_stage1_corrected_training.sh.
 set -euo pipefail
 
 # ==============================================================================
@@ -36,7 +37,7 @@ export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
 # Lock official Stage 1 weighting runs to one physical GPU.
 export CUDA_VISIBLE_DEVICES=0
 
-CONFIG_DIR="${PROJECT_ROOT}/configs"
+CONFIG_DIR="${PROJECT_ROOT}/configs/t0_two_frame_oracle"
 TRAIN_SCRIPT="${PROJECT_ROOT}/scripts/training/train_multitask.py"
 FORCE_RERUN="${FORCE_RERUN:-0}"
 

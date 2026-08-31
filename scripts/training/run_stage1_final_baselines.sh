@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SUPERSEDED PRE-CORRECTION. Use run_stage1_corrected_training.sh.
 set -euo pipefail
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
@@ -10,9 +11,9 @@ cd "${PROJECT_ROOT}"
 export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
 export CUDA_VISIBLE_DEVICES="${STEP3_GPU:-0}"
 
-EF_CONFIG="${PROJECT_ROOT}/configs/ef_only.yaml"
-SEG_CONFIG="${PROJECT_ROOT}/configs/segmentation_only.yaml"
-MTL_CONFIG="${PROJECT_ROOT}/configs/multitask_selected.yaml"
+EF_CONFIG="${PROJECT_ROOT}/configs/archive_pre_correction/ef_only.yaml"
+SEG_CONFIG="${PROJECT_ROOT}/configs/archive_pre_correction/segmentation_only.yaml"
+MTL_CONFIG="${PROJECT_ROOT}/configs/t0_two_frame_oracle/multitask_selected.yaml"
 EF_SCRIPT="${PROJECT_ROOT}/scripts/training/train_ef_stage1.py"
 SEG_SCRIPT="${PROJECT_ROOT}/scripts/training/train_segmentation_stage1.py"
 FORCE_RERUN="${FORCE_RERUN:-0}"
@@ -74,8 +75,8 @@ done
 
 echo "Selected W2 checkpoints found for all three seeds; they will be reused, not retrained."
 
-mkdir -p output/stage1/final_baselines
-python - "output/stage1/final_baselines/experiment_manifest.json" "$GIT_BRANCH" "$GIT_COMMIT" "$MTL_SOURCE" <<'PY'
+mkdir -p output/stage1/archive_pre_correction/final_baselines
+python - "output/stage1/archive_pre_correction/final_baselines/experiment_manifest.json" "$GIT_BRANCH" "$GIT_COMMIT" "$MTL_SOURCE" <<'PY'
 import datetime,json,os,sys,torch
 p,branch,commit,mtl_source=sys.argv[1:5]
 obj={

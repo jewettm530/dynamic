@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# HISTORICAL T0 CONTROLLED-BASELINE CHECK. Use verify_stage1_corrected_runs.py.
 """Verify identical relevant initialization versus MultitaskDeepLabV3."""
 import json, torch
 from echonet.modeling.multitask_deeplab import MultitaskDeepLabV3

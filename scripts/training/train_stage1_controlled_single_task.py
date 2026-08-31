@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# HISTORICAL T0 ONLY: two-frame controlled ablation. Use corrected B1/B2 scripts for new runs.
 """Train a controlled Stage 1 single-task ablation matching selected W2 settings."""
 from __future__ import annotations
 import argparse, csv, json, subprocess, sys, time

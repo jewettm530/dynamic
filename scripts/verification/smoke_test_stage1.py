@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# HISTORICAL T0 MODEL SMOKE TEST. Use smoke_test_stage1_corrected.py.
 """Fast one-batch smoke test of the fixed multi-task Stage 1 pipeline."""
 
 from __future__ import annotations

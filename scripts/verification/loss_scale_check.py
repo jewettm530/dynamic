@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# HISTORICAL T0 LOSS-SCALE CHECK. Corrected B3 uses the video-based training scripts.
 """Short Stage 1 training check for raw EF-vs-segmentation loss scale.
 
 Runs a limited number of actual optimizer steps and records, for every batch:

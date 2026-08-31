@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# HISTORICAL T0 ONLY: use evaluate_stage1_corrected_ef.py / evaluate_stage1_corrected_segmentation.py for B1/B2/B3.
 """Evaluate controlled EF-only, segmentation-only, and locked W2 on val/test."""
 import argparse, json
 from pathlib import Path
@@ -59,9 +60,9 @@ def eval_mtl(model,loader,device):
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--data-root",default="/data/jewettm/dynamic/datasets")
-    p.add_argument("--controlled-root",default="output/stage1/final_baselines_controlled")
-    p.add_argument("--mtl-root",default="output/stage1/weighting/W2")
-    p.add_argument("--output-root",default="output/stage1/final_evaluation_controlled")
+    p.add_argument("--controlled-root",default="output/stage1/T0_two_frame_oracle/final_baselines_controlled")
+    p.add_argument("--mtl-root",default="output/stage1/T0_two_frame_oracle/weighting/W2")
+    p.add_argument("--output-root",default="output/stage1/T0_two_frame_oracle/final_evaluation_controlled")
     a=p.parse_args()
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     out=Path(a.output_root); out.mkdir(parents=True,exist_ok=True)

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# HISTORICAL T0 ONLY. Use run_stage1_corrected_training.sh.
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
@@ -20,8 +21,8 @@ COMMIT="$(git rev-parse HEAD)"
 BRANCH="$(git branch --show-current)"
 TRAIN="scripts/training/train_stage1_controlled_single_task.py"
 VERIFY="scripts/verification/verify_stage1_controlled_baselines.py"
-W2="output/stage1/weighting/W2"
-OUT="output/stage1/final_baselines_controlled"
+W2="output/stage1/T0_two_frame_oracle/weighting/W2"
+OUT="output/stage1/T0_two_frame_oracle/final_baselines_controlled"
 FORCE_RERUN="${FORCE_RERUN:-0}"
 
 echo "======================================================================"
@@ -68,9 +69,9 @@ run_one() {
   local cfg
 
   if [[ "$task" == "ef" ]]; then
-    cfg="configs/ef_only_controlled.yaml"
+    cfg="configs/t0_two_frame_oracle/ef_only_controlled.yaml"
   else
-    cfg="configs/segmentation_only_controlled.yaml"
+    cfg="configs/t0_two_frame_oracle/segmentation_only_controlled.yaml"
   fi
 
   if [[ -f "$out/run_summary.json" && "$FORCE_RERUN" != "1" ]]; then

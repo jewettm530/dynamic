@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SUPERSEDED PRE-CORRECTION VIDEO BASELINE: use train_stage1_b1_video_ef.py for corrected B1.
 """Train the Stage 1 EF-only continuous-regression baseline.
 
 This final-baseline version intentionally uses the common ED/ES-traced video

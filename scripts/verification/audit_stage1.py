@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# HISTORICAL T0 DATA/CODE AUDIT. Corrected Stage 1 uses RUN_AUDIT.sh plus the stage1_corrected verification scripts.
 """Generate the compact evidence package for the professor's Stage 1 audit.
 
 This script does NOT copy or export videos. It writes metadata CSV/JSON files

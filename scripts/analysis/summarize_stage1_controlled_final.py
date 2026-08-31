@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+# HISTORICAL T0 ONLY: use summarize_stage1_corrected_final.py.
 import json
 from pathlib import Path
 import numpy as np, pandas as pd
 SEEDS=(42,2026,3407); SPLITS=("val","test")
 MODELS={"ef_only":("EF only","N/A"),"segmentation_only":("Segmentation only","N/A"),"multitask_W2":("Multi-task","W2")}
-root=Path("output/stage1/final_evaluation_controlled"); out=Path("results/stage1/final_controlled"); out.mkdir(parents=True,exist_ok=True)
+root=Path("output/stage1/T0_two_frame_oracle/final_evaluation_controlled"); out=Path("results/stage1/T0_two_frame_oracle/final_controlled"); out.mkdir(parents=True,exist_ok=True)
 rows=[]
 for key,(label,weight) in MODELS.items():
     for seed in SEEDS:

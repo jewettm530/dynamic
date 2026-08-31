@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SUPERSEDED PRE-CORRECTION SEGMENTATION BASELINE: use train_stage1_b2_segmentation.py for corrected B2.
 """Train the Stage 1 LV-segmentation-only baseline.
 
 Uses DeepLabV3-ResNet50 with one binary output channel and BCEWithLogitsLoss.

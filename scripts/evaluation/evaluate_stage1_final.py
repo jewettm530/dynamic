@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SUPERSEDED PRE-CORRECTION EVALUATION: use evaluate_stage1_corrected_ef.py / evaluate_stage1_corrected_segmentation.py.
 """Evaluate Stage 1 final checkpoints on validation and test.
 
 This script is run only AFTER W2 is locked. It evaluates:
@@ -151,10 +152,10 @@ def eval_mtl(model,dl,device):
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--data-root',default='/data/jewettm/dynamic/datasets')
-    ap.add_argument('--ef-root',default='output/stage1/final_baselines/ef_only')
-    ap.add_argument('--seg-root',default='output/stage1/final_baselines/segmentation_only')
-    ap.add_argument('--mtl-root',default='output/stage1/weighting/W2')
-    ap.add_argument('--output-root',default='output/stage1/final_evaluation')
+    ap.add_argument('--ef-root',default='output/stage1/archive_pre_correction/final_baselines/ef_only')
+    ap.add_argument('--seg-root',default='output/stage1/archive_pre_correction/final_baselines/segmentation_only')
+    ap.add_argument('--mtl-root',default='output/stage1/T0_two_frame_oracle/weighting/W2')
+    ap.add_argument('--output-root',default='output/stage1/archive_pre_correction/final_evaluation')
     ap.add_argument('--batch-size-ef',type=int,default=20)
     ap.add_argument('--batch-size-seg',type=int,default=20)
     ap.add_argument('--batch-size-mtl',type=int,default=4)

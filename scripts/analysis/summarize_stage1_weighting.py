@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# HISTORICAL T0 ONLY: use summarize_stage1_corrected_validation.py for B3 weights.
 """Summarize EchoNet-Dynamic Stage 1 multi-task loss-weighting results.
 
 This script is intended for Step 2 of the Stage 1 baseline plan. It reads the
@@ -21,7 +22,7 @@ The script NEVER reads or evaluates the test set.
 
 Expected run layout
 -------------------
-output/stage1/weighting/
+output/stage1/T0_two_frame_oracle/weighting/
     W1/seed_42/
     W1/seed_2026/
     W1/seed_3407/
@@ -129,12 +130,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input-root",
-        default="output/stage1/weighting",
+        default="output/stage1/T0_two_frame_oracle/weighting",
         help="Root containing W1/W2/W3 run directories.",
     )
     parser.add_argument(
         "--output-dir",
-        default="results/stage1/weighting",
+        default="results/stage1/T0_two_frame_oracle/weighting",
         help="Directory for seed-level, summary, and selection files.",
     )
     parser.add_argument(
