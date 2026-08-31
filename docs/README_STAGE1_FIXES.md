@@ -1,89 +1,114 @@
-# EchoNet-Dynamic Stage 1 fixed-code bundle
+# Historical Stage 1 Fix Bundle — Superseded by the Corrected Video Protocol
 
-This bundle contains complete replacement/new files for the professor's Stage 1 baseline protocol.
+> **Historical document. Do not use this file as the current Stage 1 run guide.**  
+> Current protocol: `docs/STAGE1_CORRECTED_IMPLEMENTATION.md`  
+> Current root workflow: `README.md`
 
-## Replace these existing repository files
+This document records an **intermediate Stage 1 correction effort** that occurred before the professor identified the central EF-input problem.
 
-- `echonet/datasets/echo.py`
-- `echonet/modeling/multitask_deeplab.py`
-- `echonet/losses/multitask_loss.py`
-- `scripts/training/train_multitask.py`
+## What this intermediate work fixed
 
-The `echo.py` replacement is important: the current repository version sorts traced frame **numbers**, which can destroy the official Large/Small ordering. This replacement chooses Large/ED and Small/ES by traced LV polygon area.
+The earlier code audit addressed issues such as:
 
-## Add these new files
+- consistency of ED/ES trace handling;
+- reproducibility utilities;
+- dedicated Stage 1 training scripts;
+- metric/checkpoint behavior;
+- auditing data alignment and split behavior;
+- attempts to make EF-only, segmentation-only, and multi-task experiments more controlled.
 
-- `echonet/utils/reproducibility.py`
-- `echonet/utils/stage1_metrics.py`
-- `scripts/training/train_ef_stage1.py`
-- `scripts/training/train_segmentation_stage1.py`
-- `scripts/verification/audit_stage1.py`
-- `scripts/verification/smoke_test_stage1.py`
-- `scripts/verification/loss_scale_check.py`
-- `RUN_AUDIT.sh`
+Those changes were useful, but the resulting controlled multi-task EF setup still used the expert-selected ED and ES frames as two independent 2D EF inputs.
 
-The old `echonet/utils/video.py` and `echonet/utils/segmentation.py` can stay for historical reproducibility; Stage 1 should use the dedicated new training scripts above so the old checkpoint/metric behavior cannot accidentally leak into the official experiments.
+## Why this protocol was superseded
 
-## Before running
-
-From the repository root, make a new branch and copy the files into the matching paths. Do not overwrite the historical commit without preserving it.
-
-```bash
-git checkout -b stage1-baselines
-```
-
-Confirm the dataset root. In the uploaded project, `echonet/paths.py` points to `<repo>/datasets`, so the likely path on the Lambda machine is:
+The professor's later review identified that the controlled implementation:
 
 ```text
-/data/jewettm/dynamic/datasets
+ED frame ─► EF scalar ─┐
+                       ├─► average EF
+ES frame ─► EF scalar ─┘
 ```
 
-If that folder contains `FileList.csv`, `VolumeTracings.csv`, and `Videos/`, it is correct.
+was not a true video EF model. It did not learn a temporal representation of cardiac motion and required expert ED/ES phase information at EF inference.
 
-## Audit run
+The completed controlled results were therefore retained as **T0 — two-frame oracle diagnostic**, while the main Stage 1 experiment was redesigned.
+
+## Current corrected design
+
+The current protocol uses:
+
+```text
+B1: multi-frame video → R(2+1)D-18 → temporal/spatial pooling → one EF
+
+B3: same video EF pathway
+    + sparse ED/ES segmentation supervision through the shared encoder
+```
+
+The EF inference path requires video only and does not load ground-truth ED/ES information.
+
+## Current implementation files
+
+```text
+echonet/datasets/stage1_video.py
+echonet/modeling/stage1_video_multitask.py
+
+echonet/utils/stage1_corrected.py
+echonet/utils/stage1_evaluation.py
+echonet/utils/stage1_metrics.py
+
+scripts/training/train_stage1_b1_video_ef.py
+scripts/training/train_stage1_b2_segmentation.py
+scripts/training/train_stage1_b3_video_multitask.py
+scripts/training/run_stage1_corrected_training.sh
+
+scripts/evaluation/evaluate_stage1_corrected_ef.py
+scripts/evaluation/evaluate_stage1_corrected_segmentation.py
+scripts/evaluation/run_stage1_corrected_final.sh
+
+scripts/verification/smoke_test_stage1_corrected.py
+scripts/verification/verify_video_only_inference.py
+scripts/verification/verify_stage1_corrected_runs.py
+```
+
+## Current audit
+
+Use:
 
 ```bash
-bash RUN_AUDIT.sh /data/jewettm/dynamic/datasets outputs/stage1_audit
+bash RUN_AUDIT.sh \
+    /data/jewettm/dynamic/datasets \
+    outputs/stage1_corrected_audit
 ```
 
-This creates only a small audit package. It does not export full videos.
+The current audit verifies the corrected architecture and the absence of oracle ED/ES information in the EF inference path.
 
-Expected output files include:
+## Current training
 
-- `environment.json`
-- `split_manifest.csv`
-- `split_counts.csv`
-- `split_overlap.json`
-- `tracing_coverage.csv`
-- `sample_manifest.csv`
-- `alignment_examples/*.png` (5 train + 5 val + 5 test by default)
-- `smoke_test.json`
-- `loss_scale_check.csv`
-- `loss_scale_check_summary.json`
-
-Review every overlay PNG manually before concluding that ED/ES image, trace, and mask alignment is correct.
-
-## Multi-task weight commands (do not run until the audit is approved)
-
-W1 example:
+Use:
 
 ```bash
-python scripts/training/train_multitask.py \
-  --data-root /data/jewettm/dynamic/datasets \
-  --output outputs/stage1/W1_seed42 \
-  --seed 42 --ef-weight 0.1 --seg-weight 0.9
+bash scripts/training/run_stage1_corrected_training.sh \
+    /data/jewettm/dynamic/datasets
 ```
 
-W2 uses `--ef-weight 0.5 --seg-weight 0.5`; W3 uses `--ef-weight 0.9 --seg-weight 0.1`. Repeat each with seeds 42, 2026, and 3407.
+This launches B1, B2, and all B3 weights for seeds 42, 2026, and 3407, then selects a B3 weight using validation EF MAE only.
 
-## GPU note
+## Historical file locations
 
-The shell variable is case sensitive. If you need to restrict visible CUDA devices, use:
+The completed controlled two-frame experiment is preserved under:
 
-```bash
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+```text
+configs/t0_two_frame_oracle/
+results/stage1/T0_two_frame_oracle/
+output/stage1/T0_two_frame_oracle/   # local runtime artifacts if retained
 ```
 
-not `export cuda_visible_devices=...`.
+Earlier unmatched comparisons are preserved under:
 
-However, `nvidia-smi` reporting `Unable to determine the device handle ... Unknown Error` is a driver/host-level problem and is not fixed by `CUDA_VISIBLE_DEVICES`. The audit script separately asks PyTorch whether CUDA devices are usable and records `torch.cuda.get_device_name()` when possible.
+```text
+configs/archive_pre_correction/
+results/stage1/archive_pre_correction/
+output/stage1/archive_pre_correction/   # local runtime artifacts if retained
+```
+
+These files are kept for provenance and should not be used to populate the corrected B1/B2/B3 tables.
