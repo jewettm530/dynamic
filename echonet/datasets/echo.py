@@ -1,9 +1,16 @@
-"""EchoNet-Dynamic dataset loader used by the Stage 1 experiments.
+"""EchoNet-Dynamic dataset loader.
 
-This version preserves the official EchoNet-Dynamic target API while making
-large/small trace selection explicit and robust: the traced frame with the
-larger LV mask area is treated as Large/end-diastolic (ED), and the frame with
-the smaller LV mask area is treated as Small/end-systolic (ES).
+This loader keeps the original target API but fixes two Stage 1 details:
+
+1. ``VolumeTracings.csv`` is loaded only when a requested target actually
+   needs ED/ES tracing information. EF-only/video-only inference can therefore
+   run from ``FileList.csv`` + ``Videos/`` without ground-truth ED/ES data.
+2. Large/Small traced frames are identified by traced LV polygon area rather
+   than by temporal frame number.
+
+The corrected Stage 1 B1/B2/B3 experiments use
+``echonet.datasets.stage1_video.Stage1VideoDataset`` directly because it also
+makes the video/segmentation separation explicit.
 """
 
 from __future__ import annotations
@@ -24,13 +31,22 @@ def _defaultdict_of_lists():
     return collections.defaultdict(list)
 
 
-class Echo(torchvision.datasets.VisionDataset):
-    """EchoNet-Dynamic dataset.
+def _normalise_filename(value: str) -> str:
+    value = str(value)
+    return value if os.path.splitext(value)[1] else value + ".avi"
 
-    Parameters are intentionally compatible with the original EchoNet loader.
-    Stage 1 segmentation/multitask scripts do not use spatial augmentation
-    (``pad=None``), which makes image/mask alignment unambiguous.
-    """
+
+class Echo(torchvision.datasets.VisionDataset):
+    """EchoNet-Dynamic dataset with an API compatible with the original loader."""
+
+    TRACE_TARGETS = {
+        "LargeIndex",
+        "SmallIndex",
+        "LargeFrame",
+        "SmallFrame",
+        "LargeTrace",
+        "SmallTrace",
+    }
 
     def __init__(
         self,
@@ -47,10 +63,10 @@ class Echo(torchvision.datasets.VisionDataset):
         noise=None,
         target_transform=None,
         external_test_location=None,
+        clip_start="random",
     ):
         if root is None:
             root = echonet.config.DATA_DIR
-
         super().__init__(root, target_transform=target_transform)
 
         self.split = split.upper()
@@ -68,19 +84,23 @@ class Echo(torchvision.datasets.VisionDataset):
         self.noise = noise
         self.target_transform = target_transform
         self.external_test_location = external_test_location
+        self.clip_start = clip_start
+        if self.clip_start not in {"random", "center"}:
+            raise ValueError("clip_start must be 'random' or 'center'")
 
+        self.requires_traces = any(t in self.TRACE_TARGETS for t in self.target_type)
         self.fnames: List[str] = []
         self.outcome: List[list] = []
+        self.frames = collections.defaultdict(list)
+        self.trace = collections.defaultdict(_defaultdict_of_lists)
+        self.large_frame_index: Dict[str, int] = {}
+        self.small_frame_index: Dict[str, int] = {}
 
         if self.split == "EXTERNAL_TEST":
             if self.external_test_location is None:
                 raise ValueError("external_test_location is required for EXTERNAL_TEST")
             self.fnames = sorted(os.listdir(self.external_test_location))
             self.header = []
-            self.frames = collections.defaultdict(list)
-            self.trace = collections.defaultdict(_defaultdict_of_lists)
-            self.large_frame_index = {}
-            self.small_frame_index = {}
             return
 
         file_list_path = os.path.join(self.root, "FileList.csv")
@@ -93,11 +113,7 @@ class Echo(torchvision.datasets.VisionDataset):
             data = data[data["Split"] == self.split].copy()
 
         self.header = data.columns.tolist()
-        self.fnames = data["FileName"].astype(str).tolist()
-        self.fnames = [
-            fn if os.path.splitext(fn)[1] else fn + ".avi"
-            for fn in self.fnames
-        ]
+        self.fnames = data["FileName"].astype(str).map(_normalise_filename).tolist()
         self.outcome = data.values.tolist()
 
         videos_dir = os.path.join(self.root, "Videos")
@@ -109,9 +125,23 @@ class Echo(torchvision.datasets.VisionDataset):
                 f"{os.path.join(videos_dir, first)}"
             )
 
-        self.frames = collections.defaultdict(list)
-        self.trace = collections.defaultdict(_defaultdict_of_lists)
+        # Crucial correction: video-only EF must not depend on VolumeTracings.csv.
+        if self.requires_traces:
+            self._load_tracings()
+            keep = [len(self.frames[f]) >= 2 for f in self.fnames]
+            self.fnames = [f for f, k in zip(self.fnames, keep) if k]
+            self.outcome = [o for o, k in zip(self.outcome, keep) if k]
 
+            for filename in self.fnames:
+                areas = [
+                    (self._trace_polygon_area(self.trace[filename][frame]), frame)
+                    for frame in self.frames[filename]
+                ]
+                areas.sort(key=lambda x: x[0])
+                self.small_frame_index[filename] = int(areas[0][1])
+                self.large_frame_index[filename] = int(areas[-1][1])
+
+    def _load_tracings(self) -> None:
         tracing_path = os.path.join(self.root, "VolumeTracings.csv")
         with open(tracing_path, "r") as f:
             header = f.readline().strip().split(",")
@@ -120,9 +150,11 @@ class Echo(torchvision.datasets.VisionDataset):
                 raise ValueError(
                     f"Unexpected VolumeTracings.csv header: {header}; expected {expected}"
                 )
-
             for line in f:
+                if not line.strip():
+                    continue
                 filename, x1, y1, x2, y2, frame = line.strip().split(",")
+                filename = _normalise_filename(filename)
                 frame = int(frame)
                 if frame not in self.trace[filename]:
                     self.frames[filename].append(frame)
@@ -136,38 +168,9 @@ class Echo(torchvision.datasets.VisionDataset):
                     self.trace[filename][frame], dtype=np.float32
                 )
 
-        # Only segmentation targets require ED/ES tracings. EF-only regression
-        # must retain every video in the saved split, including the six videos
-        # without VolumeTracings rows.
-        trace_targets = {
-            "LargeIndex", "SmallIndex", "LargeFrame", "SmallFrame",
-            "LargeTrace", "SmallTrace",
-        }
-        self.requires_traces = any(t in trace_targets for t in self.target_type)
-        if self.requires_traces:
-            keep = [len(self.frames[f]) >= 2 for f in self.fnames]
-            self.fnames = [f for f, k in zip(self.fnames, keep) if k]
-            self.outcome = [o for o, k in zip(self.outcome, keep) if k]
-
-        # Select Large/Small explicitly by traced LV polygon area instead of
-        # sorting frame numbers. This avoids accidentally interpreting temporal
-        # order as ED/ES order.
-        self.large_frame_index: Dict[str, int] = {}
-        self.small_frame_index: Dict[str, int] = {}
-        for filename in self.fnames:
-            if len(self.frames[filename]) < 2:
-                continue
-            areas = []
-            for frame in self.frames[filename]:
-                areas.append((self._trace_polygon_area(self.trace[filename][frame]), frame))
-            areas.sort(key=lambda x: x[0])
-            self.small_frame_index[filename] = int(areas[0][1])
-            self.large_frame_index[filename] = int(areas[-1][1])
-
     @staticmethod
     def _trace_polygon_xy(trace: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         x1, y1, x2, y2 = trace[:, 0], trace[:, 1], trace[:, 2], trace[:, 3]
-        # Match the official EchoNet construction.
         x = np.concatenate((x1[1:], np.flip(x2[1:])))
         y = np.concatenate((y1[1:], np.flip(y2[1:])))
         return x, y
@@ -177,12 +180,10 @@ class Echo(torchvision.datasets.VisionDataset):
         x, y = cls._trace_polygon_xy(trace)
         if len(x) < 3:
             return 0.0
-        # Shoelace formula.
         return float(
             0.5
             * np.abs(
-                np.dot(x, np.roll(y, 1))
-                - np.dot(y, np.roll(x, 1))
+                np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1))
             )
         )
 
@@ -224,7 +225,6 @@ class Echo(torchvision.datasets.VisionDataset):
             video -= self.mean
         else:
             video -= np.asarray(self.mean).reshape(3, 1, 1, 1)
-
         if isinstance(self.std, (float, int)):
             video /= self.std
         else:
@@ -248,18 +248,17 @@ class Echo(torchvision.datasets.VisionDataset):
             )
             c, f, h, w = video.shape
 
+        n_starts = f - (length - 1) * self.period
         if self.clips == "all":
-            start = np.arange(f - (length - 1) * self.period)
+            start = np.arange(n_starts)
+        elif self.clip_start == "center" and int(self.clips) == 1:
+            start = np.asarray([(n_starts - 1) // 2], dtype=int)
         else:
-            start = np.random.choice(
-                f - (length - 1) * self.period,
-                int(self.clips),
-            )
+            start = np.random.choice(n_starts, int(self.clips))
 
         target = []
         for target_name in self.target_type:
             key = self.fnames[index]
-
             if target_name == "Filename":
                 target.append(key)
             elif target_name == "LargeIndex":
@@ -299,10 +298,7 @@ class Echo(torchvision.datasets.VisionDataset):
             video[:, s + self.period * np.arange(length), :, :]
             for s in start
         )
-        if self.clips == 1:
-            sampled_video = clips[0]
-        else:
-            sampled_video = np.stack(clips)
+        sampled_video = clips[0] if self.clips == 1 else np.stack(clips)
 
         if self.pad is not None:
             c, l, h, w = sampled_video.shape
