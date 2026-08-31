@@ -37,4 +37,4 @@ ef:
   checkpoint_rule: lowest_validation_MAE
 
 output:
-  root: output/stage1/final_baselines/ef_only
+  root: output/stage1/archive_pre_correction/final_baselines/ef_only

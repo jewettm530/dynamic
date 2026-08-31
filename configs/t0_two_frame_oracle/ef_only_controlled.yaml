@@ -1,7 +1,7 @@
 experiment:
   stage: 1
   step: 3
-  task: segmentation_only
+  task: ef_only
   design: controlled_ablation
   reference: W2
 data:
@@ -14,7 +14,7 @@ data:
   spatial_augmentation: none
 model:
   architecture_family: MultitaskDeepLabV3
-  ablation: ef_branch_removed
+  ablation: segmentation_branch_removed
   backbone: DeepLabV3_ResNet50
   pretrained: true
   regression_hidden_dim: 256
@@ -29,11 +29,9 @@ training:
   deterministic: true
   seeds: [42, 2026, 3407]
 task:
-  structure: left_ventricular_cavity
-  labeled_frames: [ED, ES]
-  mask_type: binary
-  loss: BCEWithLogitsLoss_mean
-  threshold: 0.5
-  checkpoint_rule: highest_validation_Mean_Dice
+  ef_training_target_scale: 0-1
+  ef_evaluation_scale: 0-100
+  loss: MSELoss_mean
+  checkpoint_rule: lowest_validation_EF_MAE
 output:
-  root: output/stage1/final_baselines_controlled/segmentation_only
+  root: output/stage1/T0_two_frame_oracle/final_baselines_controlled/ef_only

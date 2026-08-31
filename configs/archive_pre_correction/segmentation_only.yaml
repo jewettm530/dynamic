@@ -36,4 +36,4 @@ segmentation:
   checkpoint_rule: highest_validation_Mean_Dice
 
 output:
-  root: output/stage1/final_baselines/segmentation_only
+  root: output/stage1/archive_pre_correction/final_baselines/segmentation_only

@@ -1,0 +1,9 @@
+model_id: B1
+task: video_EF_only
+inherits: common.yaml
+input: multi_frame_video_clip
+segmentation_supervision: none
+new_runs: 3
+seeds: [42, 2026, 3407]
+checkpoint_rule: lowest_validation_EF_MAE
+output_root: output/stage1/corrected/B1_video_ef

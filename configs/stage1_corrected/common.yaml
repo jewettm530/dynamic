@@ -1,0 +1,60 @@
+# Corrected Stage 1 common settings.
+# B1 and B3 MUST remain identical for every field in this file.
+stage: 1
+research_question: >-
+  Does sparse LV segmentation supervision improve continuous EF regression
+  when EF is predicted from a multi-frame echocardiography clip and EF
+  inference requires video only?
+
+seeds: [42, 2026, 3407]
+
+data:
+  root: /data/jewettm/dynamic/datasets
+  split_source: FileList.csv
+  ef_cohort: full_saved_split
+  expected_ef_counts: {train: 7465, val: 1288, test: 1277}
+  segmentation_cohort: videos_with_ED_ES_tracings
+  expected_segmentation_counts: {train: 7460, val: 1288, test: 1276}
+  video_clip:
+    frames: 32
+    period: 2
+    tensor_shape: "[B, 3, 32, H, W]"
+    train_sampling: random_valid_start
+    validation_test_sampling: deterministic_center_clip
+  preprocessing:
+    mean: [0.0, 0.0, 0.0]
+    std: [1.0, 1.0, 1.0]
+    spatial_augmentation: none
+
+model:
+  architecture: Stage1VideoMultitaskModel
+  encoder: r2plus1d_18
+  pretrained: true
+  temporal_aggregation: AdaptiveAvgPool3d_1x1x1_before_single_EF_output
+  segmentation_decoder: FPN_style_decoder_from_shared_R2Plus1D_features
+  segmentation_decoder_width: 128
+
+training:
+  epochs: 45
+  batch_size: 4
+  num_workers: 4
+  optimizer: SGD
+  learning_rate: 0.0001
+  momentum: 0.9
+  weight_decay: 0.0001
+  lr_scheduler: StepLR
+  lr_step_period: 15
+  deterministic: true
+
+ef:
+  target_scale_training: 0-1
+  reporting_scale: 0-100
+  loss: MSELoss_mean
+  checkpoint_rule_B1_B3: lowest_validation_EF_MAE
+  ground_truth_ED_ES_allowed_at_inference: false
+
+segmentation:
+  labels: [ED_mask, ES_mask]
+  loss: BCEWithLogitsLoss_mean
+  threshold: 0.5
+  checkpoint_rule_B2: highest_validation_Mean_Dice

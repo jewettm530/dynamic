@@ -1,0 +1,12 @@
+model_id: B3
+task: corrected_video_multitask
+inherits: common.yaml
+weight_name: W3
+ef_weight: 0.9
+segmentation_weight: 0.1
+ef_input: multi_frame_video_clip
+segmentation_input_training_only: expert_labeled_ED_ES_frames_and_masks
+seeds: [42, 2026, 3407]
+checkpoint_rule: lowest_validation_EF_MAE
+same_checkpoint_for_EF_and_segmentation_metrics: true
+output_root: output/stage1/corrected/B3_video_mtl/W3

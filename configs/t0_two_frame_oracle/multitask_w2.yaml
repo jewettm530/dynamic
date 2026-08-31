@@ -61,9 +61,9 @@ selection:
   test_results_for_weight_selection: false
 
 output:
-  root: output/stage1/weighting
+  root: output/stage1/T0_two_frame_oracle/weighting
 
 weighting:
-  name: W1
-  ef_weight: 0.1
-  seg_weight: 0.9
+  name: W2
+  ef_weight: 0.5
+  seg_weight: 0.5

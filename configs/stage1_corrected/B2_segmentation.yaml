@@ -1,0 +1,13 @@
+model_id: B2
+task: segmentation_only
+inherits: common.yaml
+input: expert_labeled_ED_ES_frames
+segmentation_supervision: ED_ES_masks
+new_runs: 3
+seeds: [42, 2026, 3407]
+checkpoint_rule: highest_validation_Mean_Dice
+reuse_previous_results: false
+reuse_reason: >-
+  The corrected B3 uses the R(2+1)D shared encoder and new segmentation
+  decoder, so the previous DeepLabV3 B2 model is not unchanged.
+output_root: output/stage1/corrected/B2_segmentation

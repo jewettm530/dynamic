@@ -49,5 +49,5 @@ checkpoint:
   same_checkpoint_for_both_tasks: true
 
 reuse:
-  source_root: output/stage1/weighting/W2
+  source_root: output/stage1/T0_two_frame_oracle/weighting/W2
   note: Reuse is valid only because no training-relevant code, split, hyperparameter, epoch budget, or checkpoint rule changed after Step 2.
