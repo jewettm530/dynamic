@@ -1,97 +1,268 @@
-EchoNet-Dynamic:<br/>Interpretable AI for beat-to-beat cardiac function assessment
-------------------------------------------------------------------------------
+# EchoNet-Dynamic Fork:<br/>Interpretable AI for beat-to-beat cardiac function assessment
 
-EchoNet-Dynamic is a end-to-end beat-to-beat deep learning model for
-  1) semantic segmentation of the left ventricle
-  2) prediction of ejection fraction by entire video or subsampled clips, and
-  3) assessment of cardiomyopathy with reduced ejection fraction.
+<p align="center">
+  <strong>Deep-learning experiments for echocardiography, ventricular segmentation, and cardiac-function assessment</strong>
+</p>
 
-For more details, see the accompanying paper,
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white">
+  <img src="https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white">
+  <img src="https://img.shields.io/badge/Medical%20Imaging-0A7EA4?style=flat-square">
+  <img src="https://img.shields.io/badge/Echocardiography-6F42C1?style=flat-square">
+</p>
 
-> [**Video-based AI for beat-to-beat assessment of cardiac function**](https://www.nature.com/articles/s41586-020-2145-8)<br/>
-  David Ouyang, Bryan He, Amirata Ghorbani, Neal Yuan, Joseph Ebinger, Curt P. Langlotz, Paul A. Heidenreich, Robert A. Harrington, David H. Liang, Euan A. Ashley, and James Y. Zou. <b>Nature</b>, March 25, 2020. https://doi.org/10.1038/s41586-020-2145-8
+## About This Fork
 
-Dataset
--------
-We share a deidentified set of 10,030 echocardiogram images which were used for training EchoNet-Dynamic.
-Preprocessing of these images, including deidentification and conversion from DICOM format to AVI format videos, were performed with OpenCV and pydicom. Additional information is at https://echonet.github.io/dynamic/. These deidentified images are shared with a non-commerical data use agreement.
+This repository is a **research fork of [EchoNet-Dynamic](https://github.com/echonet/dynamic)** used to investigate alternative deep-learning approaches for cardiac ultrasound.
 
-Examples
---------
+The original EchoNet-Dynamic project introduced deep learning for:
 
-We show examples of our semantic segmentation for nine distinct patients below.
-Three patients have normal cardiac function, three have low ejection fractions, and three have arrhythmia.
-No human tracings for these patients were used by EchoNet-Dynamic.
+* left-ventricular segmentation;
+* ejection-fraction estimation;
+* video-based cardiac-function assessment.
 
-| Normal                                 | Low Ejection Fraction                  | Arrhythmia                             |
-| ------                                 | ---------------------                  | ----------                             |
-| ![](docs/media/0X10A28877E97DF540.gif) | ![](docs/media/0X129133A90A61A59D.gif) | ![](docs/media/0X132C1E8DBB715D1D.gif) |
-| ![](docs/media/0X1167650B8BEFF863.gif) | ![](docs/media/0X13CE2039E2D706A.gif ) | ![](docs/media/0X18BA5512BE5D6FFA.gif) |
-| ![](docs/media/0X148FFCBF4D0C398F.gif) | ![](docs/media/0X16FC9AA0AD5D8136.gif) | ![](docs/media/0X1E12EEE43FD913E5.gif) |
+This fork preserves the upstream implementation while adding experiments involving **multi-task learning, alternative segmentation architectures, and cardiac-function modeling**.
 
-Installation
-------------
+> The EchoNet-Dynamic dataset, original models, and foundational methodology were developed by the original EchoNet authors. This repository contains independent research experiments built on that work.
 
-First, clone this repository and enter the directory by running:
+---
 
-    git clone https://github.com/echonet/dynamic.git
-    cd dynamic
+## Research Focus
 
-EchoNet-Dynamic is implemented for Python 3, and depends on the following packages:
-  - NumPy
-  - PyTorch
-  - Torchvision
-  - OpenCV
-  - skimage
-  - sklearn
-  - tqdm
+Current work investigates questions such as:
 
-Echonet-Dynamic and its dependencies can be installed by navigating to the cloned directory and running
+1. Can segmentation and cardiac-function prediction benefit from shared representations?
+2. How do single-task and multi-task models compare under controlled conditions?
+3. Which architectures best extract clinically relevant information from echocardiography?
+4. How should ejection-fraction prediction use temporal information from the complete video sequence?
 
-    pip install --user .
+---
 
-Usage
------
-### Preprocessing DICOM Videos
+## Research Extensions
 
-The input of EchoNet-Dynamic is an apical-4-chamber view echocardiogram video of any length. The easiest way to run our code is to use videos from our dataset, but we also provide a Jupyter Notebook, `ConvertDICOMToAVI.ipynb`, to convert DICOM files to AVI files used for input to EchoNet-Dynamic. The Notebook deidentifies the video by cropping out information outside of the ultrasound sector, resizes the input video, and saves the video in AVI format. 
+### 🫀 Multi-task DeepLabV3
 
-### Setting Path to Data
+A custom multi-task architecture jointly supports:
 
-By default, EchoNet-Dynamic assumes that a copy of the data is saved in a folder named `a4c-video-dir/` in this directory.
-This path can be changed by creating a configuration file named `echonet.cfg` (an example configuration file is `example.cfg`).
+* left-ventricular segmentation of end-diastolic and end-systolic frames;
+* cardiac-function prediction from shared learned representations.
 
-### Running Code
+Key files include:
 
-EchoNet-Dynamic has three main components: segmenting the left ventricle, predicting ejection fraction from subsampled clips, and assessing cardiomyopathy with beat-by-beat predictions.
-Each of these components can be run with reasonable choices of hyperparameters with the scripts below.
-We describe our full hyperparameter sweep in the next section.
+```text
+echonet/modeling/multitask_deeplab.py
+scripts/training/train_multitask.py
+```
 
-#### Frame-by-frame Semantic Segmentation of the Left Ventricle
+The goal is to test whether anatomical segmentation can provide useful auxiliary supervision for cardiac-function modeling.
 
-    echonet segmentation --save_video
+### 🧠 Alternative Segmentation Models
 
-This creates a directory named `output/segmentation/deeplabv3_resnet50_random/`, which will contain
-  - log.csv: training and validation losses
-  - best.pt: checkpoint of weights for the model with the lowest validation loss
-  - size.csv: estimated size of left ventricle for each frame and indicator for beginning of beat
-  - videos: directory containing videos with segmentation overlay
+The fork also contains experimental architecture work including:
 
-#### Prediction of Ejection Fraction from Subsampled Clips
+```text
+echonet/modeling/vit_segmentation_model.py
+```
 
-  echonet video
+for exploring approaches beyond the original convolutional segmentation model.
 
-This creates a directory named `output/video/r2plus1d_18_32_2_pretrained/`, which will contain
-  - log.csv: training and validation losses
-  - best.pt: checkpoint of weights for the model with the lowest validation loss
-  - test_predictions.csv: ejection fraction prediction for subsampled clips
+### 🎥 Video-Based EF Modeling
 
-#### Beat-by-beat Prediction of Ejection Fraction from Full Video and Assesment of Cardiomyopathy
+Additional experiments investigate ejection-fraction prediction directly from echocardiogram video rather than relying only on labeled end-diastolic and end-systolic frames.
 
-The final beat-by-beat prediction and analysis is performed with `scripts/beat_analysis.R`.
-This script combines the results from segmentation output in `size.csv` and the clip-level ejection fraction prediction in `test_predictions.csv`. The beginning of each systolic phase is detected by using the peak detection algorithm from scipy (`scipy.signal.find_peaks`) and a video clip centered around the beat is used for beat-by-beat prediction.
+---
 
-### Hyperparameter Sweeps
+## Evaluation
 
-The full set of hyperparameter sweeps from the paper can be run via `run_experiments.sh`.
-In particular, we choose between pretrained and random initialization for the weights, the model (selected from `r2plus1d_18`, `r3d_18`, and `mc3_18`), the length of the video (1, 4, 8, 16, 32, 64, and 96 frames), and the sampling period (1, 2, 4, 6, and 8 frames).
+Depending on the task, experiments use metrics including:
+
+### EF regression
+
+* MAE
+* RMSE
+* R²
+* Pearson correlation
+
+### Segmentation
+
+* Dice coefficient
+* IoU
+* accuracy
+* precision
+* recall
+* specificity
+
+### EF classification
+
+* accuracy
+* precision
+* recall
+* F1
+* specificity
+* ROC-AUC
+
+Controlled comparisons aim to keep dataset splits, preprocessing, optimization settings, and evaluation procedures constant wherever possible.
+
+---
+
+## Dataset
+
+The project uses the **EchoNet-Dynamic dataset**, containing more than 10,000 deidentified echocardiogram videos.
+
+Dataset information and access:
+
+https://echonet.github.io/dynamic
+
+The dataset itself is **not stored in this repository**.
+
+---
+
+## Installation
+
+```bash
+git clone https://github.com/jewettm530/dynamic.git
+cd dynamic
+pip install --user .
+```
+
+Core dependencies include PyTorch, Torchvision, NumPy, OpenCV, scikit-image, scikit-learn, and tqdm.
+
+Experimental training workflows are located under:
+
+```text
+scripts/training/
+```
+
+---
+
+## Repository Structure
+
+```text
+dynamic/
+├── echonet/
+│   ├── datasets/
+│   ├── modeling/             # Upstream + experimental architectures
+│   ├── losses/
+│   └── ...
+│
+├── scripts/
+│   └── training/             # Experimental training workflows
+│
+├── docs/
+├── output/                   # Locally generated experiment outputs
+└── README.md
+```
+
+---
+
+## Limitations
+
+* This repository is an active research fork.
+* Experimental implementations continue to evolve.
+* Performance on EchoNet-Dynamic does not establish external clinical generalizability.
+* Frame-based models cannot capture all temporal information contained in full videos.
+* Models in this repository are research tools and are not intended for clinical use.
+
+---
+
+## Attribution
+
+Original project:
+
+**[echonet/dynamic](https://github.com/echonet/dynamic)**
+
+Original publication:
+
+Ouyang, D., He, B., Ghorbani, A., et al. (2020). *Video-based AI for beat-to-beat assessment of cardiac function.* **Nature**.
+
+https://doi.org/10.1038/s41586-020-2145-8
+
+---
+
+**Skills:** `Python` · `PyTorch` · `Deep Learning` · `Medical Imaging` · `Echocardiography` · `Segmentation` · `Multi-task Learning` · `Video Modeling`
+
+---
+
+<details>
+<summary><h1>Technical Details</h1></summary>
+
+### Original EchoNet-Dynamic
+
+The upstream EchoNet-Dynamic system supports:
+
+1. frame-level left-ventricular segmentation;
+2. ejection-fraction prediction from video clips;
+3. beat-by-beat cardiac-function analysis.
+
+The original commands and implementation remain available in this fork for comparison and reproducibility.
+
+### Multi-task Frame Model
+
+The current frame-based multi-task workflow uses:
+
+```text
+LargeFrame  → end-diastolic frame
+SmallFrame  → end-systolic frame
+LargeTrace  → end-diastolic LV mask
+SmallTrace  → end-systolic LV mask
+EF          → cardiac-function target
+```
+
+Conceptually:
+
+```text
+Echocardiogram frame
+        │
+        ▼
+ Shared feature extractor
+        │
+        ├────────► LV segmentation
+        │
+        └────────► cardiac-function prediction
+```
+
+The segmentation branch learns anatomical information while the second task tests whether those shared features also support cardiac-function assessment.
+
+### Patient-Level Classification Evaluation
+
+For the reduced-EF classification experiment, probabilities from a participant's large and small frames are combined before patient-level classification metrics are calculated.
+
+### Experimental Outputs
+
+Training scripts save artifacts such as:
+
+```text
+checkpoint.pt
+best.pt
+training_history.csv
+validation_metrics.csv
+```
+
+under experiment-specific output directories.
+
+### Controlled Comparisons
+
+Architecture comparisons should hold the following constant wherever possible:
+
+* train/validation/test split;
+* random seeds;
+* frame/video sampling;
+* preprocessing;
+* optimizer settings;
+* checkpoint-selection rules;
+* evaluation metrics.
+
+This helps distinguish architectural improvements from differences in experimental setup.
+
+### Upstream Usage
+
+The original EchoNet functionality remains available for reproducing upstream tasks such as:
+
+```bash
+echonet segmentation --save_video
+echonet video
+```
+
+For the complete original workflow and data-use requirements, refer to the upstream repository and project documentation.
+
+</details>
